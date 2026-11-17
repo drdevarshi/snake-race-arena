@@ -10,8 +10,8 @@ Stack: Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS · Fram
 |---|---|---|
 | 1 | Project setup, theme, i18n, navigation, landing page | ✅ Done |
 | 2 | Supabase schema + RLS, register/login, email verification, password reset, roles, player dashboard | ✅ Done |
-| 3 | Snake engine (Canvas, deterministic courses, water/tunnels, power-ups, touch controls) | ⏳ Next |
-| 4 | Competitions (public/private), invite codes, attempt log, server-side replay validation | |
+| 3 | Snake engine (Canvas, deterministic courses, water/tunnels, power-ups, touch controls) | ✅ Done |
+| 4 | Competitions (public/private), invite codes, attempt log, server-side replay validation | ⏳ Next |
 | 5 | Leaderboards, results, podium, history | |
 | 6 | Snake Coins ledger, rewards shop, inventory | |
 | 7 | Spin the Wheel, claim codes, referral tracking | |
@@ -29,7 +29,7 @@ cp .env.example .env.local   # values aren't needed until Phase 2
 npm run dev                  # http://localhost:3000
 ```
 
-Other scripts: `npm run build`, `npm start`, `npm run typecheck`.
+Other scripts: `npm run build`, `npm start`, `npm run typecheck`, `npm test` (game engine tests).
 
 ## Supabase setup (Phase 2)
 
@@ -78,41 +78,75 @@ update public.profiles set role = 'admin' where username = 'YourUsername';
 - Auth rate limits are enforced by Supabase. App-level rate limiting comes in Phase 8.
 - Protected routes (`/dashboard`, `/inventory`, `/create`, `/organizer`, `/admin`) are checked twice: once in middleware and again in each page. `/admin` also requires the admin role.
 
+## The Snake game (Phase 3)
+
+Play at `/play`. Practice is open to everyone, with no login. `/arena` lists the courses.
+
+### How it works
+
+`src/game/` is a **pure, deterministic engine** with no browser code. It contains no randomness and no clocks, and all of its maths uses whole numbers.
+
+- The simulation advances in fixed **20 ms ticks**. The snake moves one cell every N ticks: slow = 8, normal = 6, fast = 5.
+- A run is fully described by **course + speed + input log**. The input log is a list of `{ t: tick, d: "U"|"D"|"L"|"R" }` entries.
+- `replay(course, speed, inputs)` re-simulates a run and returns the verified status, time and apples. In Phase 4 the server will call this to rank runs, and it will never accept a time from the browser.
+- Replay is strict. It marks a log invalid if the inputs are out of order, include an impossible turn, come after the run ended, are malformed, or exceed 10 minutes.
+
+### Rules implemented
+
+| Rule | Behaviour |
+|---|---|
+| Fixed length | The snake never grows. Collect all apples (10 per course) to finish. |
+| Water | Moves take 2× as long, unless Extra Energy is active. |
+| Bridges | Cross water at full speed. |
+| Tunnels | Numbered mouths. Entering one exits at its pair, keeping the same direction. |
+| Crashes | Hitting a wall, rock or your own body ends the attempt. |
+| Speed Boost | Moves 2 ticks faster for 3 s. |
+| Safety Shield | Absorbs one crash. The snake then stalls safely for 0.4 s so you can turn. |
+| Apple Magnet | Collects apples within 2 cells for 5 s. |
+| Extra Energy | Full speed in water for 6 s. |
+| Fairness | Power-ups sit at fixed positions on the course, the same for everyone. Competitions lock the speed setting. |
+
+### Controls
+
+Steer with the arrow keys or WASD. Space, P or Esc pauses, R restarts and Enter starts. On touch screens, swipe on the board or use the on-screen pad. The game auto-pauses when you switch tabs. Sound effects and music are generated in the browser, so there are no audio files to download.
+
+### Adding a course
+
+Courses live in `src/game/courses/index.ts` and are drawn with `CourseBuilder` (`rect`, `border`, `replace`, `set`). In the ASCII legend:
+
+- `.` ground, `#` rock, `~` water, `=` bridge
+- `S` start, `@` apple, `1`–`9` tunnel pairs
+- `B` boost, `H` shield, `M` magnet, `E` energy
+
+Run `npm test` after adding a course. A bot plays every course start to finish and checks that a replay reproduces the exact time. The tests fail if any apple is unreachable.
+
 ## Project structure
 
 ```
 src/
-  app/                    Routes (App Router)
-    layout.tsx            Root layout: fonts, I18nProvider, Navbar, Footer
-    page.tsx              Landing page
-    globals.css           Tailwind layers + neon utilities
-    not-found.tsx         404 page
-    arena|create|leaderboard|login|register|shop|spin/   Placeholder routes
+  app/                      Routes (App Router)
+    layout.tsx              Root layout: fonts, I18nProvider, Navbar (auth-aware), Footer
+    page.tsx                Landing page
+    arena/  play/           Course list · gameplay
+    register/ login/ verify-email/ forgot-password/ reset-password/   Auth screens
+    auth/confirm/route.ts   Email link handler (verify + password recovery)
+    dashboard/ inventory/ admin/                                      Protected pages
+    create/ leaderboard/ shop/ spin/                                  Placeholders (later phases)
+  game/                     Pure deterministic engine (shared by browser + server)
+    types.ts engine.ts replay.ts course.ts courses/ engine.test.ts
   components/
-    brand/SnakeLogo.tsx   Original SVG logo mark
-    layout/               Navbar (responsive + mobile menu), Footer
-    home/                 Hero, HeroSnakeCanvas (attract-mode preview), landing sections
-    ui/                   NeonButton/NeonLink, GlowCard, Icons, ComingSoon
-  config/                 Navigation items, default reward amounts
-  i18n/
-    config.ts             Supported locales
-    messages/en.json      All user-facing text
-    translate.ts          getT() for server components
-    I18nProvider.tsx      useT() hook for client components
-    auth/                 Register, login, verify-email, password forms
-    forms/                TextField, PasswordField, SubmitButton, FormMessage, AuthCard
-    dashboard/            Avatar
+    game/                   GameClient, renderer (canvas), sound, TouchPad, CoursePreview
+    auth/ forms/            Auth forms and reusable form controls
+    home/ layout/ ui/ brand/ dashboard/
   lib/
-    supabase/             server.ts (user client), admin.ts (service role), middleware.ts, env.ts
-    auth/                 actions.ts (server actions), validation.ts (zod), session.ts (getSession/requireUser/requireAdmin)
-    game/progression.ts   XP → level curve
-  middleware.ts           Session refresh + route guards
-  app/auth/confirm/       Email link handler (verify + password recovery)
-  app/dashboard/          Player dashboard
-supabase/migrations/      SQL migrations (run in order)
+    supabase/               server.ts (user client), admin.ts (service role), middleware.ts, env.ts
+    auth/                   actions.ts (server actions), validation.ts (zod), session.ts
+    game/progression.ts     XP → level curve
+  i18n/                     config.ts, translate.ts (getT), I18nProvider.tsx (useT), messages/en.json
+  config/                   Navigation, default reward amounts
+  middleware.ts             Session refresh + route guards
+supabase/migrations/        SQL migrations (run in order)
 ```
-
-Planned additions: `src/game/` (pure engine shared by browser and server validator).
 
 ## Translations
 

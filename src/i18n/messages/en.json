@@ -187,6 +187,107 @@
       "admin": "Admin dashboard"
     }
   },
+  "game": {
+    "courses": {
+      "training-grounds": "Training Grounds",
+      "neon-valley": "Neon Valley"
+    },
+    "courseDesc": {
+      "training-grounds": "A compact course that introduces water, bridges, a tunnel and every power-up.",
+      "neon-valley": "A winding river, three bridges, two crossing tunnels and tight rock clusters."
+    },
+    "practice": "Practice",
+    "practiceBadge": "Practice mode — times are not ranked",
+    "time": "Time",
+    "apples": "Apples",
+    "moves": "Moves",
+    "attempts": "Attempts",
+    "speed": "Speed",
+    "speeds": { "slow": "Slow", "normal": "Normal", "fast": "Fast" },
+    "state": {
+      "title": "Status",
+      "normal": "Cruising",
+      "water": "In water — slowed",
+      "boost": "Boosting"
+    },
+    "powerups": {
+      "title": "Power-ups",
+      "none": "None active",
+      "boost": "Speed Boost",
+      "shield": "Safety Shield",
+      "magnet": "Apple Magnet",
+      "energy": "Extra Energy",
+      "boostDesc": "Move faster for 3 seconds.",
+      "shieldDesc": "Survives one crash.",
+      "magnetDesc": "Pulls in apples within 2 cells for 5 seconds.",
+      "energyDesc": "Swim at full speed for 6 seconds.",
+      "ready": "Ready"
+    },
+    "miniMap": "Mini-map",
+    "legend": {
+      "title": "Course legend",
+      "water": "Water slows you",
+      "bridge": "Bridge — full speed",
+      "tunnel": "Tunnel — fixed entry and exit",
+      "rock": "Rock or wall — crash"
+    },
+    "controls": {
+      "title": "Controls",
+      "keyboard": "Arrow keys or WASD to steer",
+      "pause": "Space or P to pause",
+      "restart": "R to restart",
+      "touch": "Swipe on the board or use the pad",
+      "up": "Up",
+      "down": "Down",
+      "left": "Left",
+      "right": "Right"
+    },
+    "ready": {
+      "title": "Get ready",
+      "goal": "Collect all {count} apples as fast as you can.",
+      "rules": "Your snake stays the same length. Walls, rocks and your own body end the run.",
+      "start": "Start race",
+      "hint": "Press Enter or tap Start"
+    },
+    "go": "GO!",
+    "paused": {
+      "title": "Paused",
+      "resume": "Resume",
+      "restart": "Restart",
+      "quit": "Quit to Arena"
+    },
+    "over": {
+      "title": "Game over",
+      "subtitle": "Better luck next time!",
+      "wall": "You hit the wall.",
+      "rock": "You crashed into a rock.",
+      "self": "You bit your own tail.",
+      "yourTime": "Your time",
+      "applesCollected": "Apples collected",
+      "tryAgain": "Try again",
+      "back": "Back to Arena"
+    },
+    "win": {
+      "title": "Victory!",
+      "newBest": "New personal best!",
+      "best": "Your best on this device: {time}",
+      "finalTime": "Final time"
+    },
+    "sound": "Sound effects",
+    "music": "Music",
+    "pause": "Pause",
+    "notFound": "That course doesn't exist."
+  },
+  "arena": {
+    "title": "Game Arena",
+    "subtitle": "Warm up on a practice course. Ranked competitions open in the next update.",
+    "practiceTitle": "Practice courses",
+    "competitionsTitle": "Competitions",
+    "competitionsSoon": "Public and private competitions with verified leaderboards are coming next.",
+    "play": "Play",
+    "size": "{w}×{h} grid",
+    "defaultSpeed": "Default speed: {speed}"
+  },
   "footer": {
     "rights": "© {year} Snake Race Arena. All rights reserved.",
     "disclaimer": "Free to play. No paid entry, no cash prizes.",
