@@ -1,0 +1,95 @@
+{
+  "brand": {
+    "name": "Snake Race Arena",
+    "nameLine1": "Snake",
+    "nameLine2": "Race Arena",
+    "tagline": "Play. Compete. Conquer."
+  },
+  "nav": {
+    "home": "Home",
+    "play": "Play",
+    "leaderboard": "Leaderboard",
+    "rewards": "Rewards",
+    "spin": "Spin",
+    "create": "Create",
+    "login": "Log in",
+    "register": "Register",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "mainNav": "Main navigation"
+  },
+  "home": {
+    "hero": {
+      "eyebrow": "Free-to-play snake racing",
+      "title1": "Play.",
+      "title2": "Compete.",
+      "title3": "Conquer.",
+      "subtitle": "Race the same course as every other player. Collect all 10 apples, dodge the water and walls, and post the fastest verified time.",
+      "ctaPrimary": "Enter Arena",
+      "ctaSecondary": "Spin the Wheel",
+      "badgeFree": "Always free",
+      "badgeFair": "Same course for all",
+      "badgeVerified": "Server-verified times"
+    },
+    "features": {
+      "title": "Built for fair competition",
+      "subtitle": "Every racer gets the same map, the same apples and the same rules. Only skill decides the podium.",
+      "items": {
+        "sameCourse": {
+          "title": "Identical courses",
+          "body": "Same map, start position, apple layout and speed for every participant."
+        },
+        "verified": {
+          "title": "Verified results",
+          "body": "Every run is replayed on the server. Times sent straight from a browser are never trusted."
+        },
+        "private": {
+          "title": "Private games",
+          "body": "Host a match for 2–20 friends with an invite link or access code. No approval needed."
+        },
+        "coins": {
+          "title": "Snake Coins",
+          "body": "Earn coins for finishing and placing. Redeem them for power-ups and free spins."
+        }
+      }
+    },
+    "how": {
+      "title": "How a race works",
+      "steps": {
+        "join": { "title": "Join", "body": "Pick a public competition or enter a private access code." },
+        "race": { "title": "Race", "body": "Collect all apples. Water slows you, walls end the run." },
+        "retry": { "title": "Retry", "body": "Unlimited attempts during the competition window." },
+        "rank": { "title": "Rank", "body": "Your best verified time sets your leaderboard position." }
+      }
+    },
+    "rewards": {
+      "title": "Rewards that keep you racing",
+      "completion": "Finish the course",
+      "first": "1st place bonus",
+      "second": "2nd place bonus",
+      "third": "3rd place bonus",
+      "coins": "{count} coins",
+      "note": "Snake Coins are virtual, non-transferable and have no cash value."
+    },
+    "cta": {
+      "title": "Ready to race?",
+      "body": "Create a free account and join your first competition.",
+      "button": "Create free account"
+    }
+  },
+  "footer": {
+    "rights": "© {year} Snake Race Arena. All rights reserved.",
+    "disclaimer": "Free to play. No paid entry, no cash prizes.",
+    "language": "Language"
+  },
+  "comingSoon": {
+    "title": "Coming soon",
+    "body": "This area is being built in {phase}.",
+    "back": "Back to home"
+  },
+  "notFound": {
+    "title": "Off the course",
+    "body": "That page doesn't exist.",
+    "back": "Back to home"
+  }
+}
