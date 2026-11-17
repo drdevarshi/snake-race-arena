@@ -8,10 +8,40 @@ import { useT } from "@/i18n/I18nProvider";
 import { mainNav } from "@/config/navigation";
 import { SnakeLogo } from "@/components/brand/SnakeLogo";
 import { NeonLink } from "@/components/ui/NeonButton";
-import { IconClose, IconMenu } from "@/components/ui/Icons";
+import { IconClose, IconCoin, IconMenu } from "@/components/ui/Icons";
+import { logoutAction } from "@/lib/auth/actions";
 import { cn } from "@/lib/cn";
 
-export function Navbar() {
+export interface NavUser {
+  username: string;
+  coins: number;
+}
+
+function LogoutButton({ className }: { className?: string }) {
+  const { t } = useT();
+  return (
+    <form action={logoutAction}>
+      <button type="submit" className={cn("focus-ring rounded-lg font-semibold uppercase tracking-wide", className)}>
+        {t("nav.logout")}
+      </button>
+    </form>
+  );
+}
+
+function CoinPill({ coins }: { coins: number }) {
+  const { t } = useT();
+  return (
+    <span
+      className="flex items-center gap-1.5 rounded-full border border-neon-gold/50 bg-neon-gold/10 px-3 py-1 font-display text-sm font-bold text-neon-gold"
+      aria-label={t("nav.coinsAria", { count: coins })}
+    >
+      <IconCoin width={16} height={16} aria-hidden />
+      {coins.toLocaleString("en")}
+    </span>
+  );
+}
+
+export function Navbar({ user }: { user?: NavUser | null }) {
   const { t } = useT();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -61,13 +91,25 @@ export function Navbar() {
           ))}
         </ul>
 
-        <div className="hidden items-center gap-2 lg:flex">
-          <Link href="/login" className="focus-ring rounded-lg px-3 py-2 font-semibold uppercase tracking-wide text-slate-300 hover:text-white">
-            {t("nav.login")}
-          </Link>
-          <NeonLink href="/register" size="sm">
-            {t("nav.register")}
-          </NeonLink>
+        <div className="hidden items-center gap-3 lg:flex">
+          {user ? (
+            <>
+              <CoinPill coins={user.coins} />
+              <NeonLink href="/dashboard" size="sm" variant="ghost">
+                {user.username}
+              </NeonLink>
+              <LogoutButton className="px-2 py-2 text-sm text-slate-400 hover:text-white" />
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="focus-ring rounded-lg px-3 py-2 font-semibold uppercase tracking-wide text-slate-300 hover:text-white">
+                {t("nav.login")}
+              </Link>
+              <NeonLink href="/register" size="sm">
+                {t("nav.register")}
+              </NeonLink>
+            </>
+          )}
         </div>
 
         <button
@@ -107,14 +149,26 @@ export function Navbar() {
                   </Link>
                 </li>
               ))}
-              <li className="grid grid-cols-2 gap-2 pt-3">
-                <NeonLink href="/login" variant="ghost" size="sm">
-                  {t("nav.login")}
-                </NeonLink>
-                <NeonLink href="/register" size="sm">
-                  {t("nav.register")}
-                </NeonLink>
-              </li>
+              {user ? (
+                <li className="flex items-center justify-between gap-2 border-t border-arena-border pt-4">
+                  <CoinPill coins={user.coins} />
+                  <div className="flex items-center gap-2">
+                    <NeonLink href="/dashboard" variant="ghost" size="sm">
+                      {t("nav.dashboard")}
+                    </NeonLink>
+                    <LogoutButton className="px-3 py-2 text-sm text-slate-400" />
+                  </div>
+                </li>
+              ) : (
+                <li className="grid grid-cols-2 gap-2 pt-3">
+                  <NeonLink href="/login" variant="ghost" size="sm">
+                    {t("nav.login")}
+                  </NeonLink>
+                  <NeonLink href="/register" size="sm">
+                    {t("nav.register")}
+                  </NeonLink>
+                </li>
+              )}
             </ul>
           </motion.div>
         )}

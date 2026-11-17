@@ -1,8 +1,9 @@
-import { ComingSoon } from "@/components/ui/ComingSoon";
-import { getT } from "@/i18n/translate";
+import { RegisterForm } from "@/components/auth/RegisterForm";
+import { normalizeReferral } from "@/lib/auth/validation";
 
 export const metadata = { title: "Register" };
 
-export default function RegisterPage() {
-  return <ComingSoon title={getT()("nav.register")} phase="Phase 2" />;
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ ref?: string }> }) {
+  const { ref } = await searchParams;
+  return <RegisterForm referral={normalizeReferral(ref)} />;
 }

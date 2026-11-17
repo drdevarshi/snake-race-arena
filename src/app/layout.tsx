@@ -5,6 +5,7 @@ import { defaultLocale } from "@/i18n/config";
 import { getT } from "@/i18n/translate";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { getSession } from "@/lib/auth/session";
 
 const t = getT();
 
@@ -25,7 +26,12 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+  const navUser = session?.profile
+    ? { username: session.profile.username, coins: session.profile.coin_balance }
+    : null;
+
   return (
     <html lang={defaultLocale}>
       <head>
@@ -39,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="flex min-h-screen flex-col">
         <I18nProvider locale={defaultLocale}>
-          <Navbar />
+          <Navbar user={navUser} />
           <main className="flex-1">{children}</main>
           <Footer />
         </I18nProvider>

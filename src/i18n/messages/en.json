@@ -14,6 +14,9 @@
     "create": "Create",
     "login": "Log in",
     "register": "Register",
+    "dashboard": "Dashboard",
+    "logout": "Log out",
+    "coinsAria": "{count} Snake Coins",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "mainNav": "Main navigation"
@@ -75,6 +78,113 @@
       "title": "Ready to race?",
       "body": "Create a free account and join your first competition.",
       "button": "Create free account"
+    }
+  },
+  "auth": {
+    "fields": {
+      "username": "Username",
+      "usernameHint": "3–20 letters, numbers or underscores. Shown on leaderboards.",
+      "email": "Email",
+      "password": "Password",
+      "passwordHint": "At least 8 characters, with a letter and a number.",
+      "confirmPassword": "Confirm password",
+      "newPassword": "New password",
+      "acceptTerms": "I understand Snake Race Arena is free to play, with no cash prizes, and Snake Coins have no cash value.",
+      "show": "Show",
+      "hide": "Hide",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "welcome": "Welcome to Snake Race Arena",
+    "register": {
+      "title": "Create your account",
+      "subtitle": "Join free and start racing in minutes.",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "haveAccount": "Already have an account?",
+      "loginLink": "Log in",
+      "referred": "Welcome! You came from {source}."
+    },
+    "login": {
+      "title": "Log in",
+      "subtitle": "Welcome back, racer.",
+      "submit": "Log in",
+      "submitting": "Logging in…",
+      "noAccount": "New to the arena?",
+      "registerLink": "Create an account",
+      "forgot": "Forgot password?"
+    },
+    "verify": {
+      "title": "Verify your email",
+      "body": "We sent a verification link to {email}. Click it to activate your account.",
+      "bodyNoEmail": "We sent a verification link to your email. Click it to activate your account.",
+      "hint": "Can't find it? Check your spam folder.",
+      "resend": "Resend email",
+      "resending": "Sending…",
+      "resent": "If an account needs verifying, a new email is on its way.",
+      "back": "Back to home",
+      "linkInvalid": "That link is invalid or has expired. Request a new one below.",
+      "notConfigured": "Authentication isn't configured yet."
+    },
+    "forgot": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email and we'll send you a reset link.",
+      "submit": "Send reset link",
+      "submitting": "Sending…",
+      "sent": "If that email has an account, a reset link is on its way.",
+      "back": "Back to log in"
+    },
+    "reset": {
+      "title": "Choose a new password",
+      "submit": "Update password",
+      "submitting": "Updating…"
+    },
+    "errors": {
+      "usernameLength": "Username must be 3–20 characters.",
+      "usernameChars": "Use only letters, numbers and underscores.",
+      "usernameTaken": "That username is taken or not allowed.",
+      "emailInvalid": "Enter a valid email address.",
+      "passwordLength": "Password must be 8–72 characters.",
+      "passwordStrength": "Password needs at least one letter and one number.",
+      "passwordRequired": "Enter your password.",
+      "passwordMismatch": "Passwords don't match.",
+      "acceptTerms": "Please confirm to continue.",
+      "invalidCredentials": "Incorrect email or password.",
+      "emailNotConfirmed": "Please verify your email first.",
+      "rateLimited": "Too many attempts. Please wait a minute and try again.",
+      "resetLinkExpired": "Your reset link has expired. Request a new one.",
+      "notConfigured": "Authentication isn't configured yet. Add your Supabase keys to .env.local.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "dashboard": {
+    "title": "Player Dashboard",
+    "welcomeBack": "Welcome back",
+    "level": "Level {level}",
+    "xp": "{current} / {needed} XP",
+    "coins": "Snake Coins",
+    "memberSince": "Racing since {date}",
+    "verifiedBanner": "Email verified. Your account is ready!",
+    "resetBanner": "Your password has been updated.",
+    "adminBadge": "Admin",
+    "suspended": "Your account is suspended. Contact support if you think this is a mistake.",
+    "stats": {
+      "title": "My stats",
+      "competitions": "Competitions",
+      "bestTime": "Best time",
+      "podiums": "Podiums",
+      "attempts": "Attempts",
+      "empty": "Stats appear after your first race."
+    },
+    "quick": {
+      "title": "Quick actions",
+      "play": "Find a competition",
+      "create": "Create a private game",
+      "spin": "Spin the wheel",
+      "shop": "Rewards shop",
+      "inventory": "My inventory",
+      "leaderboard": "Leaderboard",
+      "admin": "Admin dashboard"
     }
   },
   "footer": {
