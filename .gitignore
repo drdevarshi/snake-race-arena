@@ -10,3 +10,7 @@ build/
 next-env.d.ts
 *.tsbuildinfo
 .vercel
+
+# Local backup files
+*.backup
+*.bak

@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: process.cwd(),
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {
@@ -17,4 +18,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default nextConfig
