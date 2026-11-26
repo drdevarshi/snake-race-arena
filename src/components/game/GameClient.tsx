@@ -673,7 +673,7 @@ function Overlay({ children }: { children: React.ReactNode }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto overscroll-contain touch-pan-y bg-arena-black/75 p-6 text-center backdrop-blur-sm"
+      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto overscroll-contain touch-none bg-arena-black/75 p-6 text-center backdrop-blur-sm"
     >
       {children}
     </motion.div>
