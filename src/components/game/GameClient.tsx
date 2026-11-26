@@ -503,6 +503,21 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
             {/* absolutely positioned so the canvas can never resize its own container (feedback loop) */}
             <canvas ref={canvasRef} className="absolute inset-0 block" role="img" aria-label={courseName} />
 
+            {/* Phones/tablets: the top-bar pause button is scrolled out of view during a run, so a copy sits on the board. */}
+            {(phase === "playing" || phase === "countdown") && (
+              <button
+                type="button"
+                onClick={pause}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDownCapture={onGuardPointerDownCapture}
+                onClickCapture={onGuardClickCapture}
+                aria-label={t("game.pause")}
+                className="focus-ring absolute left-2 top-2 z-10 rounded-xl border border-neon-cyan/50 bg-arena-panel/80 p-2.5 text-neon-cyan backdrop-blur lg:hidden"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+              </button>
+            )}
+
             {/* Mini-map */}
             <div className="pointer-events-none absolute right-2 top-2 rounded-lg border border-neon-cyan/40 bg-arena-black/70 p-1 backdrop-blur">
               <canvas ref={miniRef} width={150} height={96} className="block h-[64px] w-[100px] sm:h-[96px] sm:w-[150px]" aria-label={t("game.miniMap")} />
@@ -511,11 +526,11 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
             <AnimatePresence>
               {phase === "ready" && (
                 <Overlay key="ready">
-                  <h2 className="font-display text-3xl font-black uppercase text-neon-green text-glow-green">{t("game.ready.title")}</h2>
-                  <p className="mt-3 text-lg text-white">{t("game.ready.goal", { count: total })}</p>
-                  <p className="mt-1 max-w-sm text-sm text-slate-400">{t("game.ready.rules")}</p>
+                  <h2 className="font-display text-2xl font-black uppercase text-neon-green text-glow-green sm:text-3xl">{t("game.ready.title")}</h2>
+                  <p className="mt-2 text-base text-white sm:mt-3 sm:text-lg">{t("game.ready.goal", { count: total })}</p>
+                  <p className="mt-1 max-w-sm text-xs text-slate-400 sm:text-sm">{t("game.ready.rules")}</p>
                   {!lockSpeed && (
-                    <div className="mt-5" role="radiogroup" aria-label={t("game.speed")}>
+                    <div className="mt-3 sm:mt-5" role="radiogroup" aria-label={t("game.speed")}>
                       <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{t("game.speed")}</p>
                       <div className="flex gap-2">
                         {(["slow", "normal", "fast"] as const).map((sp) => (
@@ -536,7 +551,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
                       </div>
                     </div>
                   )}
-                  <NeonButton size="lg" className="mt-6" onClick={start} icon={<IconBolt width={20} height={20} />}>
+                  <NeonButton size="lg" className="mt-4 sm:mt-6" onClick={start} icon={<IconBolt width={20} height={20} />}>
                     {t("game.ready.start")}
                   </NeonButton>
                   <p className="mt-3 hidden text-xs text-slate-500 sm:block">{t("game.ready.hint")}</p>
@@ -559,9 +574,9 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
 
               {phase === "paused" && (
                 <Overlay key="paused">
-                  <h2 className="font-display text-3xl font-black uppercase text-neon-cyan text-glow-cyan">{t("game.paused.title")}</h2>
+                  <h2 className="font-display text-2xl font-black uppercase text-neon-cyan text-glow-cyan sm:text-3xl">{t("game.paused.title")}</h2>
                   <div
-                    className="mt-6 flex flex-col gap-3 sm:flex-row"
+                    className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3"
                     data-pause-control=""
                     onPointerDownCapture={onGuardPointerDownCapture}
                     onClickCapture={onGuardClickCapture}
@@ -581,20 +596,20 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
                         initial={{ scale: 0.6, rotate: -4 }}
                         animate={{ scale: 1, rotate: 0 }}
                         transition={{ type: "spring", stiffness: 200 }}
-                        className="bg-gradient-to-b from-neon-gold to-orange-500 bg-clip-text font-display text-5xl font-black uppercase italic text-transparent"
+                        className="bg-gradient-to-b from-neon-gold to-orange-500 bg-clip-text font-display text-4xl font-black uppercase italic text-transparent sm:text-5xl"
                       >
                         {t("game.win.title")}
                       </motion.h2>
                       {result.newBest && <p className="mt-2 font-display font-bold uppercase text-neon-green">{t("game.win.newBest")}</p>}
                       <p className="mt-4 text-xs font-bold uppercase tracking-widest text-slate-400">{t("game.win.finalTime")}</p>
-                      <p className="font-mono text-5xl font-black tabular-nums text-white">{formatTime(result.timeMs)}</p>
+                      <p className="font-mono text-4xl font-black tabular-nums text-white sm:text-5xl">{formatTime(result.timeMs)}</p>
                       {result.best !== null && !result.newBest && (
                         <p className="mt-2 text-sm text-slate-400">{t("game.win.best", { time: formatTime(result.best) })}</p>
                       )}
                     </>
                   ) : (
                     <>
-                      <h2 className="bg-gradient-to-b from-neon-magenta to-neon-purple bg-clip-text font-display text-5xl font-black uppercase italic text-transparent">
+                      <h2 className="bg-gradient-to-b from-neon-magenta to-neon-purple bg-clip-text font-display text-4xl font-black uppercase italic text-transparent sm:text-5xl">
                         {t("game.over.title")}
                       </h2>
                       <p className="mt-2 text-lg text-white">{t(`game.over.${result.deathReason ?? "wall"}`)}</p>
@@ -610,7 +625,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
                       </div>
                     </>
                   )}
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3">
                     <NeonButton onClick={start}>{t("game.over.tryAgain")}</NeonButton>
                     <NeonLink href={exitHref} variant="purple">{t("game.over.back")}</NeonLink>
                   </div>
@@ -686,7 +701,7 @@ function Overlay({ children }: { children: React.ReactNode }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto overscroll-contain touch-none bg-arena-black/75 p-6 text-center backdrop-blur-sm"
+      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto overscroll-contain touch-none bg-arena-black/75 p-4 text-center sm:p-6 backdrop-blur-sm"
     >
       {children}
     </motion.div>
