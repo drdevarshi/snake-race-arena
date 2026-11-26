@@ -92,11 +92,28 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
   const hudTickRef = useRef(0);
   const onRunEndRef = useRef(onRunEnd);
   onRunEndRef.current = onRunEnd;
+  /** QA-3: the single 3-2-1 timer; only one can run at a time. */
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** QA-2: which phase the current pause interrupted. Resume relies on this alone. */
+  const pausedFromRef = useRef<"countdown" | "playing" | null>(null);
+  /** QA-4: window-focus guard for pointer clicks on the pause controls. */
+  const focusGuardRef = useRef<{ active: boolean; until: number }>({ active: false, until: 0 });
+  const pressInGuardRef = useRef(false);
 
   const setPhaseBoth = useCallback((p: Phase) => {
     phaseRef.current = p;
     setPhase(p);
   }, []);
+
+  const stopCountdown = useCallback(() => {
+    if (countdownRef.current !== null) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  }, []);
+
+  // Stop the countdown timer when the player leaves the page.
+  useEffect(() => stopCountdown, [stopCountdown]);
 
   // Preferences
   useEffect(() => {
@@ -229,25 +246,20 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     return () => cancelAnimationFrame(raf);
   }, [course, endRun]);
 
-  // Countdown → playing
-  const start = useCallback(() => {
-    if (!course) return;
-    sound.unlock();
-    if (musicOn) sound.setMusic(true);
-    resetState();
-    setResult(null);
-    setAttempts((a) => a + 1);
+  // Countdown → playing. Always starts from 3; any previous countdown timer is stopped first.
+  const runCountdown = useCallback(() => {
+    stopCountdown();
     setPhaseBoth("countdown");
     setCount(3);
     sound.countdown();
     let n = 3;
-    const id = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       n--;
       if (n > 0) {
         setCount(n);
         sound.countdown();
       } else {
-        clearInterval(id);
+        stopCountdown();
         setCount(0);
         sound.countdown(true);
         accRef.current = 0;
@@ -255,17 +267,69 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
         setPhaseBoth("playing");
       }
     }, 650);
-  }, [course, musicOn, resetState, setPhaseBoth]);
+  }, [setPhaseBoth, stopCountdown]);
+
+  const start = useCallback(() => {
+    if (!course) return;
+    sound.unlock();
+    if (musicOn) sound.setMusic(true);
+    stopCountdown();
+    pausedFromRef.current = null;
+    resetState();
+    setResult(null);
+    setAttempts((a) => a + 1);
+    runCountdown();
+  }, [course, musicOn, resetState, runCountdown, stopCountdown]);
 
   const pause = useCallback(() => {
-    if (phaseRef.current === "playing") setPhaseBoth("paused");
-  }, [setPhaseBoth]);
+    const p = phaseRef.current;
+    if (p === "playing") {
+      pausedFromRef.current = "playing";
+      setPhaseBoth("paused");
+    } else if (p === "countdown") {
+      stopCountdown();
+      pausedFromRef.current = "countdown";
+      setPhaseBoth("paused");
+    }
+    // Already paused (or not in a run): ignored, so repeated blur/visibility events cause one pause.
+  }, [setPhaseBoth, stopCountdown]);
 
   const resume = useCallback(() => {
     if (phaseRef.current !== "paused") return;
+    const from = pausedFromRef.current;
+    pausedFromRef.current = null;
+    if (from === "countdown") {
+      // Same game, same attempt: the 3-2-1 restarts from 3.
+      runCountdown();
+      return;
+    }
     lastTsRef.current = 0;
     setPhaseBoth("playing");
-  }, [setPhaseBoth]);
+  }, [runCountdown, setPhaseBoth]);
+
+  /** QA-4: true while the window is unfocused and for ~500 ms after focus returns. */
+  const isFocusGuarded = () => {
+    const g = focusGuardRef.current;
+    if (!g.active) return false;
+    if (performance.now() < g.until) return true;
+    g.active = false;
+    return false;
+  };
+
+  /** QA-4: remember whether a mouse, touch or pen press began inside the guard. */
+  const onGuardPointerDownCapture = () => {
+    pressInGuardRef.current = isFocusGuarded();
+  };
+
+  /** QA-4: ignore only the click of a pointer press that began inside the guard. Keyboard and assistive-technology clicks (detail 0) always pass. */
+  const onGuardClickCapture = (e: React.MouseEvent) => {
+    const blocked = e.detail >= 1 && pressInGuardRef.current;
+    pressInGuardRef.current = false;
+    if (blocked) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   const steer = useCallback((d: Dir) => {
     sound.unlock();
@@ -283,6 +347,15 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
         if (p === "playing" || p === "countdown") e.preventDefault();
         steer(d);
         return;
+      }
+      // While paused, Space on a focused pause control is not the global resume shortcut:
+      // buttons activate as browsers normally do; on the Quit link Space does nothing.
+      if (e.key === " " && p === "paused" && e.target instanceof HTMLElement) {
+        const control = e.target.closest("[data-pause-control] button, [data-pause-control] a, button[data-pause-control]");
+        if (control) {
+          if (control.tagName === "A") e.preventDefault();
+          return;
+        }
       }
       if (e.key === " " || e.key === "p" || e.key === "P" || e.key === "Escape") {
         if (p === "playing") { e.preventDefault(); pause(); }
@@ -303,6 +376,24 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     const onVis = () => document.hidden && pause();
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
+  }, [pause]);
+
+  // QA-4: auto-pause when the window loses focus (never auto-resume). Pointer clicks on the
+  // pause controls are ignored until about 500 ms after focus returns.
+  useEffect(() => {
+    const onBlur = () => {
+      focusGuardRef.current = { active: true, until: Number.POSITIVE_INFINITY };
+      pause();
+    };
+    const onFocus = () => {
+      if (focusGuardRef.current.active) focusGuardRef.current.until = performance.now() + 500;
+    };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [pause]);
 
   // Swipe on the board
@@ -368,6 +459,9 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
         <button
           type="button"
           onClick={() => (phase === "playing" ? pause() : phase === "paused" ? resume() : undefined)}
+          onPointerDownCapture={onGuardPointerDownCapture}
+          onClickCapture={onGuardClickCapture}
+          data-pause-control=""
           disabled={phase !== "playing" && phase !== "paused"}
           aria-label={t("game.pause")}
           className="focus-ring rounded-xl border border-neon-cyan/50 bg-arena-panel p-2.5 text-neon-cyan disabled:opacity-40"
@@ -453,7 +547,12 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
               {phase === "paused" && (
                 <Overlay key="paused">
                   <h2 className="font-display text-3xl font-black uppercase text-neon-cyan text-glow-cyan">{t("game.paused.title")}</h2>
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <div
+                    className="mt-6 flex flex-col gap-3 sm:flex-row"
+                    data-pause-control=""
+                    onPointerDownCapture={onGuardPointerDownCapture}
+                    onClickCapture={onGuardClickCapture}
+                  >
                     <NeonButton onClick={resume}>{t("game.paused.resume")}</NeonButton>
                     <NeonButton variant="purple" onClick={start}>{t("game.paused.restart")}</NeonButton>
                     <NeonLink href={exitHref} variant="ghost">{t("game.paused.quit")}</NeonLink>
@@ -574,7 +673,7 @@ function Overlay({ children }: { children: React.ReactNode }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto bg-arena-black/75 p-6 text-center backdrop-blur-sm"
+      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto overscroll-contain touch-pan-y bg-arena-black/75 p-6 text-center backdrop-blur-sm"
     >
       {children}
     </motion.div>
