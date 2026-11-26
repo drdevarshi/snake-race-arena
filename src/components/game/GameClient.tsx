@@ -92,11 +92,28 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
   const hudTickRef = useRef(0);
   const onRunEndRef = useRef(onRunEnd);
   onRunEndRef.current = onRunEnd;
+  /** QA-3: the single 3-2-1 timer; only one can run at a time. */
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** QA-2: which phase the current pause interrupted. Resume relies on this alone. */
+  const pausedFromRef = useRef<"countdown" | "playing" | null>(null);
+  /** QA-4: window-focus guard for pointer clicks on the pause controls. */
+  const focusGuardRef = useRef<{ active: boolean; until: number }>({ active: false, until: 0 });
+  const pressInGuardRef = useRef(false);
 
   const setPhaseBoth = useCallback((p: Phase) => {
     phaseRef.current = p;
     setPhase(p);
   }, []);
+
+  const stopCountdown = useCallback(() => {
+    if (countdownRef.current !== null) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  }, []);
+
+  // Stop the countdown timer when the player leaves the page.
+  useEffect(() => stopCountdown, [stopCountdown]);
 
   // Preferences
   useEffect(() => {
@@ -229,25 +246,31 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     return () => cancelAnimationFrame(raf);
   }, [course, endRun]);
 
-  // Countdown → playing
-  const start = useCallback(() => {
-    if (!course) return;
-    sound.unlock();
-    if (musicOn) sound.setMusic(true);
-    resetState();
-    setResult(null);
-    setAttempts((a) => a + 1);
+  // Phone/tablet layout (below lg, where the arrow pad is shown): line the board up just under the
+  // sticky header so the board and the arrow pad are both on screen. The offset is the board's
+  // scroll-margin-top, so the CSS class stays the single source of truth. Desktop is untouched.
+  const fitBoardOnPhone = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || !window.matchMedia("(max-width: 1023.98px)").matches) return;
+    const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - margin;
+    window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  }, []);
+
+  // Countdown → playing. Always starts from 3; any previous countdown timer is stopped first.
+  const runCountdown = useCallback(() => {
+    stopCountdown();
     setPhaseBoth("countdown");
     setCount(3);
     sound.countdown();
     let n = 3;
-    const id = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       n--;
       if (n > 0) {
         setCount(n);
         sound.countdown();
       } else {
-        clearInterval(id);
+        stopCountdown();
         setCount(0);
         sound.countdown(true);
         accRef.current = 0;
@@ -255,17 +278,71 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
         setPhaseBoth("playing");
       }
     }, 650);
-  }, [course, musicOn, resetState, setPhaseBoth]);
+  }, [setPhaseBoth, stopCountdown]);
+
+  const start = useCallback(() => {
+    if (!course) return;
+    sound.unlock();
+    if (musicOn) sound.setMusic(true);
+    stopCountdown();
+    pausedFromRef.current = null;
+    resetState();
+    setResult(null);
+    setAttempts((a) => a + 1);
+    runCountdown();
+    fitBoardOnPhone();
+  }, [course, fitBoardOnPhone, musicOn, resetState, runCountdown, stopCountdown]);
 
   const pause = useCallback(() => {
-    if (phaseRef.current === "playing") setPhaseBoth("paused");
-  }, [setPhaseBoth]);
+    const p = phaseRef.current;
+    if (p === "playing") {
+      pausedFromRef.current = "playing";
+      setPhaseBoth("paused");
+    } else if (p === "countdown") {
+      stopCountdown();
+      pausedFromRef.current = "countdown";
+      setPhaseBoth("paused");
+    }
+    // Already paused (or not in a run): ignored, so repeated blur/visibility events cause one pause.
+  }, [setPhaseBoth, stopCountdown]);
 
   const resume = useCallback(() => {
     if (phaseRef.current !== "paused") return;
+    const from = pausedFromRef.current;
+    pausedFromRef.current = null;
+    fitBoardOnPhone();
+    if (from === "countdown") {
+      // Same game, same attempt: the 3-2-1 restarts from 3.
+      runCountdown();
+      return;
+    }
     lastTsRef.current = 0;
     setPhaseBoth("playing");
-  }, [setPhaseBoth]);
+  }, [fitBoardOnPhone, runCountdown, setPhaseBoth]);
+
+  /** QA-4: true while the window is unfocused and for ~500 ms after focus returns. */
+  const isFocusGuarded = () => {
+    const g = focusGuardRef.current;
+    if (!g.active) return false;
+    if (performance.now() < g.until) return true;
+    g.active = false;
+    return false;
+  };
+
+  /** QA-4: remember whether a mouse, touch or pen press began inside the guard. */
+  const onGuardPointerDownCapture = () => {
+    pressInGuardRef.current = isFocusGuarded();
+  };
+
+  /** QA-4: ignore only the click of a pointer press that began inside the guard. Keyboard and assistive-technology clicks (detail 0) always pass. */
+  const onGuardClickCapture = (e: React.MouseEvent) => {
+    const blocked = e.detail >= 1 && pressInGuardRef.current;
+    pressInGuardRef.current = false;
+    if (blocked) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   const steer = useCallback((d: Dir) => {
     sound.unlock();
@@ -283,6 +360,15 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
         if (p === "playing" || p === "countdown") e.preventDefault();
         steer(d);
         return;
+      }
+      // While paused, Space on a focused pause control is not the global resume shortcut:
+      // buttons activate as browsers normally do; on the Quit link Space does nothing.
+      if (e.key === " " && p === "paused" && e.target instanceof HTMLElement) {
+        const control = e.target.closest("[data-pause-control] button, [data-pause-control] a, button[data-pause-control]");
+        if (control) {
+          if (control.tagName === "A") e.preventDefault();
+          return;
+        }
       }
       if (e.key === " " || e.key === "p" || e.key === "P" || e.key === "Escape") {
         if (p === "playing") { e.preventDefault(); pause(); }
@@ -303,6 +389,24 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     const onVis = () => document.hidden && pause();
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
+  }, [pause]);
+
+  // QA-4: auto-pause when the window loses focus (never auto-resume). Pointer clicks on the
+  // pause controls are ignored until about 500 ms after focus returns.
+  useEffect(() => {
+    const onBlur = () => {
+      focusGuardRef.current = { active: true, until: Number.POSITIVE_INFINITY };
+      pause();
+    };
+    const onFocus = () => {
+      if (focusGuardRef.current.active) focusGuardRef.current.until = performance.now() + 500;
+    };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [pause]);
 
   // Swipe on the board
@@ -368,6 +472,9 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
         <button
           type="button"
           onClick={() => (phase === "playing" ? pause() : phase === "paused" ? resume() : undefined)}
+          onPointerDownCapture={onGuardPointerDownCapture}
+          onClickCapture={onGuardClickCapture}
+          data-pause-control=""
           disabled={phase !== "playing" && phase !== "paused"}
           aria-label={t("game.pause")}
           className="focus-ring rounded-xl border border-neon-cyan/50 bg-arena-panel p-2.5 text-neon-cyan disabled:opacity-40"
@@ -387,7 +494,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
           {/* Board */}
           <div
             ref={containerRef}
-            className="relative h-[58vh] w-full touch-none overflow-hidden rounded-2xl border border-neon-cyan/40 bg-arena-black shadow-glow-cyan sm:h-[62vh] lg:h-[min(70vh,680px)]"
+            className="relative h-[max(240px,calc(100svh_-_250px))] w-full scroll-mt-[73px] touch-none overflow-hidden rounded-2xl border border-neon-cyan/40 bg-arena-black shadow-glow-cyan lg:h-[min(70vh,680px)]"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endSwipe}
@@ -395,6 +502,21 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
           >
             {/* absolutely positioned so the canvas can never resize its own container (feedback loop) */}
             <canvas ref={canvasRef} className="absolute inset-0 block" role="img" aria-label={courseName} />
+
+            {/* Phones/tablets: the top-bar pause button is scrolled out of view during a run, so a copy sits on the board. */}
+            {(phase === "playing" || phase === "countdown") && (
+              <button
+                type="button"
+                onClick={pause}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDownCapture={onGuardPointerDownCapture}
+                onClickCapture={onGuardClickCapture}
+                aria-label={t("game.pause")}
+                className="focus-ring absolute left-2 top-2 z-10 rounded-xl border border-neon-cyan/50 bg-arena-panel/80 p-2.5 text-neon-cyan backdrop-blur lg:hidden"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+              </button>
+            )}
 
             {/* Mini-map */}
             <div className="pointer-events-none absolute right-2 top-2 rounded-lg border border-neon-cyan/40 bg-arena-black/70 p-1 backdrop-blur">
@@ -404,11 +526,11 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
             <AnimatePresence>
               {phase === "ready" && (
                 <Overlay key="ready">
-                  <h2 className="font-display text-3xl font-black uppercase text-neon-green text-glow-green">{t("game.ready.title")}</h2>
-                  <p className="mt-3 text-lg text-white">{t("game.ready.goal", { count: total })}</p>
-                  <p className="mt-1 max-w-sm text-sm text-slate-400">{t("game.ready.rules")}</p>
+                  <h2 className="font-display text-2xl font-black uppercase text-neon-green text-glow-green sm:text-3xl">{t("game.ready.title")}</h2>
+                  <p className="mt-2 text-base text-white sm:mt-3 sm:text-lg">{t("game.ready.goal", { count: total })}</p>
+                  <p className="mt-1 max-w-sm text-xs text-slate-400 sm:text-sm">{t("game.ready.rules")}</p>
                   {!lockSpeed && (
-                    <div className="mt-5" role="radiogroup" aria-label={t("game.speed")}>
+                    <div className="mt-3 sm:mt-5" role="radiogroup" aria-label={t("game.speed")}>
                       <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{t("game.speed")}</p>
                       <div className="flex gap-2">
                         {(["slow", "normal", "fast"] as const).map((sp) => (
@@ -429,7 +551,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
                       </div>
                     </div>
                   )}
-                  <NeonButton size="lg" className="mt-6" onClick={start} icon={<IconBolt width={20} height={20} />}>
+                  <NeonButton size="lg" className="mt-4 sm:mt-6" onClick={start} icon={<IconBolt width={20} height={20} />}>
                     {t("game.ready.start")}
                   </NeonButton>
                   <p className="mt-3 hidden text-xs text-slate-500 sm:block">{t("game.ready.hint")}</p>
@@ -452,8 +574,13 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
 
               {phase === "paused" && (
                 <Overlay key="paused">
-                  <h2 className="font-display text-3xl font-black uppercase text-neon-cyan text-glow-cyan">{t("game.paused.title")}</h2>
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <h2 className="font-display text-2xl font-black uppercase text-neon-cyan text-glow-cyan sm:text-3xl">{t("game.paused.title")}</h2>
+                  <div
+                    className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3"
+                    data-pause-control=""
+                    onPointerDownCapture={onGuardPointerDownCapture}
+                    onClickCapture={onGuardClickCapture}
+                  >
                     <NeonButton onClick={resume}>{t("game.paused.resume")}</NeonButton>
                     <NeonButton variant="purple" onClick={start}>{t("game.paused.restart")}</NeonButton>
                     <NeonLink href={exitHref} variant="ghost">{t("game.paused.quit")}</NeonLink>
@@ -469,20 +596,20 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
                         initial={{ scale: 0.6, rotate: -4 }}
                         animate={{ scale: 1, rotate: 0 }}
                         transition={{ type: "spring", stiffness: 200 }}
-                        className="bg-gradient-to-b from-neon-gold to-orange-500 bg-clip-text font-display text-5xl font-black uppercase italic text-transparent"
+                        className="bg-gradient-to-b from-neon-gold to-orange-500 bg-clip-text font-display text-4xl font-black uppercase italic text-transparent sm:text-5xl"
                       >
                         {t("game.win.title")}
                       </motion.h2>
                       {result.newBest && <p className="mt-2 font-display font-bold uppercase text-neon-green">{t("game.win.newBest")}</p>}
                       <p className="mt-4 text-xs font-bold uppercase tracking-widest text-slate-400">{t("game.win.finalTime")}</p>
-                      <p className="font-mono text-5xl font-black tabular-nums text-white">{formatTime(result.timeMs)}</p>
+                      <p className="font-mono text-4xl font-black tabular-nums text-white sm:text-5xl">{formatTime(result.timeMs)}</p>
                       {result.best !== null && !result.newBest && (
                         <p className="mt-2 text-sm text-slate-400">{t("game.win.best", { time: formatTime(result.best) })}</p>
                       )}
                     </>
                   ) : (
                     <>
-                      <h2 className="bg-gradient-to-b from-neon-magenta to-neon-purple bg-clip-text font-display text-5xl font-black uppercase italic text-transparent">
+                      <h2 className="bg-gradient-to-b from-neon-magenta to-neon-purple bg-clip-text font-display text-4xl font-black uppercase italic text-transparent sm:text-5xl">
                         {t("game.over.title")}
                       </h2>
                       <p className="mt-2 text-lg text-white">{t(`game.over.${result.deathReason ?? "wall"}`)}</p>
@@ -498,7 +625,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
                       </div>
                     </>
                   )}
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3">
                     <NeonButton onClick={start}>{t("game.over.tryAgain")}</NeonButton>
                     <NeonLink href={exitHref} variant="purple">{t("game.over.back")}</NeonLink>
                   </div>
@@ -574,7 +701,7 @@ function Overlay({ children }: { children: React.ReactNode }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto bg-arena-black/75 p-6 text-center backdrop-blur-sm"
+      className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto overscroll-contain touch-none bg-arena-black/75 p-4 text-center sm:p-6 backdrop-blur-sm"
     >
       {children}
     </motion.div>
