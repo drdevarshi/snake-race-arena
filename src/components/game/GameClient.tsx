@@ -246,6 +246,17 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     return () => cancelAnimationFrame(raf);
   }, [course, endRun]);
 
+  // Phone/tablet layout (below lg, where the arrow pad is shown): line the board up just under the
+  // sticky header so the board and the arrow pad are both on screen. The offset is the board's
+  // scroll-margin-top, so the CSS class stays the single source of truth. Desktop is untouched.
+  const fitBoardOnPhone = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || !window.matchMedia("(max-width: 1023.98px)").matches) return;
+    const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - margin;
+    window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  }, []);
+
   // Countdown → playing. Always starts from 3; any previous countdown timer is stopped first.
   const runCountdown = useCallback(() => {
     stopCountdown();
@@ -279,7 +290,8 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     setResult(null);
     setAttempts((a) => a + 1);
     runCountdown();
-  }, [course, musicOn, resetState, runCountdown, stopCountdown]);
+    fitBoardOnPhone();
+  }, [course, fitBoardOnPhone, musicOn, resetState, runCountdown, stopCountdown]);
 
   const pause = useCallback(() => {
     const p = phaseRef.current;
@@ -298,6 +310,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     if (phaseRef.current !== "paused") return;
     const from = pausedFromRef.current;
     pausedFromRef.current = null;
+    fitBoardOnPhone();
     if (from === "countdown") {
       // Same game, same attempt: the 3-2-1 restarts from 3.
       runCountdown();
@@ -305,7 +318,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
     }
     lastTsRef.current = 0;
     setPhaseBoth("playing");
-  }, [runCountdown, setPhaseBoth]);
+  }, [fitBoardOnPhone, runCountdown, setPhaseBoth]);
 
   /** QA-4: true while the window is unfocused and for ~500 ms after focus returns. */
   const isFocusGuarded = () => {
@@ -481,7 +494,7 @@ export function GameClient({ courseId, initialSpeed, lockSpeed = false, onRunEnd
           {/* Board */}
           <div
             ref={containerRef}
-            className="relative h-[58vh] w-full touch-none overflow-hidden rounded-2xl border border-neon-cyan/40 bg-arena-black shadow-glow-cyan sm:h-[62vh] lg:h-[min(70vh,680px)]"
+            className="relative h-[max(240px,calc(100svh_-_250px))] w-full scroll-mt-[73px] touch-none overflow-hidden rounded-2xl border border-neon-cyan/40 bg-arena-black shadow-glow-cyan lg:h-[min(70vh,680px)]"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endSwipe}
