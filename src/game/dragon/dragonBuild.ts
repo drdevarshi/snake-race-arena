@@ -14,8 +14,8 @@ import { createBodyGeometry } from "./bodyGeometry";
 import { radiusProfile, v3, type Frame, type Vec3 } from "./bodyPath";
 import { buildPrototypeHead, type PrototypeHead } from "./prototypeHead";
 import { createCountedTracker } from "./resources";
-import { createScaleMaterial } from "./scaleMaterial";
-import { SKINS, type SkinId } from "./skins";
+import { applySkin as applyScaleSkin, createScaleMaterial } from "./scaleMaterial";
+import { SKINS, type Skin, type SkinId } from "./skins";
 import { QUALITY, type Quality } from "./quality";
 
 /**
@@ -78,6 +78,11 @@ export type Built = {
   crystals: MeshStandardMaterial[];
   /** Reused every frame so the body update allocates nothing. */
   work: { pts: Vec3[]; frames: Frame[]; radii: number[] };
+  /**
+   * Sets every skin-coloured material of the dragon (body scales, crest, fin, and the whole head).
+   * Also used during the build, so switching skin always gives the same colours as a fresh build.
+   */
+  applySkin: (skin: Skin) => void;
   dispose: () => void;
 };
 
@@ -113,6 +118,16 @@ export function build(skinId: SkinId, quality: Quality): Built {
 
   const head = buildPrototypeHead(skin, MAX_RADIUS * radiusProfile(0), tracker.track);
 
+  const applySkin = (k: Skin) => {
+    applyScaleSkin(bodyMat, k); // includes the dragon-light colour the shader uses
+    for (const c of [crystal, finMat]) {
+      c.color.set(k.body);
+      c.emissive.set(k.glow);
+    }
+    head.applySkin(k);
+  };
+  applySkin(skin);
+
   return {
     body,
     bodyMat,
@@ -121,6 +136,7 @@ export function build(skinId: SkinId, quality: Quality): Built {
     fin,
     head,
     crystals: [crystal, finMat, head.crystal],
+    applySkin,
     work: {
       pts: Array.from({ length: q.rings }, () => v3()),
       frames: Array.from({ length: q.rings }, () => ({ t: v3(), n: v3(), b: v3() })),

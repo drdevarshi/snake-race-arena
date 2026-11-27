@@ -6,6 +6,7 @@ import { Bloom, EffectComposer, ToneMapping } from "@react-three/postprocessing"
 import { ToneMappingMode } from "postprocessing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FogExp2, REVISION, type PerspectiveCamera } from "three";
+import { portraitPlacement } from "./cameraFit";
 import { createWaterMirror, type WaterMirror } from "./waterMirror";
 import r3fPackage from "@react-three/fiber/package.json";
 import { Dragon } from "./Dragon";
@@ -101,22 +102,30 @@ function Stage({ quality, skinId }: { quality: Quality; skinId: SkinId }) {
 }
 
 /**
- * Keeps the whole figure-of-eight in view on any screen shape: on tall, narrow screens (phones)
- * the camera moves back along its current direction. Runs only when the shape changes, so it never
- * fights the orbit controls.
+ * Keeps the whole figure-of-eight in view on any screen shape. Landscape and desktop screens keep the
+ * original framing. Portrait screens use a geometric fit (cameraFit.ts): the closest camera at which
+ * everything the dragon can reach stays on screen, looking along the route's long axis. Runs only
+ * when the shape changes, so it never fights the orbit controls.
  */
 function CameraFit() {
   const camera = useThree((s) => s.camera);
   const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
   useEffect(() => {
-    const base = 10.1; // distance that frames the route at 16:10
-    // Narrow screens: widen the view a little and move back only partly, so the dragon stays big.
-    const portrait = aspect < 1;
-    if ("fov" in camera) (camera as PerspectiveCamera).fov = portrait ? 58 : 48;
-    const dist = aspect >= 1.3 ? base : base * Math.pow(1.3 / aspect, portrait ? 0.45 : 0.85);
-    const dir = camera.position.clone().setY(camera.position.y - 0.9).normalize();
-    camera.position.set(dir.x * dist, 0.9 + dir.y * dist, dir.z * dist);
-    camera.updateProjectionMatrix();
+    const cam = camera as PerspectiveCamera;
+    if (aspect < 1) {
+      const fit = portraitPlacement(aspect);
+      cam.fov = fit.fov;
+      cam.position.set(fit.position.x, fit.position.y, fit.position.z);
+    } else {
+      // Unchanged landscape and desktop framing.
+      const base = 10.1; // distance that frames the route at 16:10
+      cam.fov = 48;
+      const dist = aspect >= 1.3 ? base : base * Math.pow(1.3 / aspect, 0.85);
+      const dir = camera.position.clone().setY(camera.position.y - 0.9).normalize();
+      camera.position.set(dir.x * dist, 0.9 + dir.y * dist, dir.z * dist);
+    }
+    camera.lookAt(0, 0.9, 0);
+    cam.updateProjectionMatrix();
   }, [camera, aspect]);
   return null;
 }

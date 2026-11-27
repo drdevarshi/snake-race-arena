@@ -15,7 +15,7 @@ import {
   Vector3,
 } from "three";
 import type { ResourceTracker } from "./resources";
-import { createScaleMaterial } from "./scaleMaterial";
+import { applySkin as applyScaleSkin, createScaleMaterial } from "./scaleMaterial";
 import type { Skin } from "./skins";
 
 /**
@@ -120,6 +120,12 @@ export type PrototypeHead = {
   scaleMaterials: Material[];
   crystal: MeshStandardMaterial;
   eyeMaterial: MeshBasicMaterial;
+  /**
+   * Sets every skin-coloured material of the head: scales, crystal horns and brows, eyes, whiskers,
+   * nostrils, mouth glow and fang tint. The build uses this same function, so a switched skin and a
+   * fresh build always match.
+   */
+  applySkin: (skin: Skin) => void;
 };
 
 /**
@@ -175,9 +181,11 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
     { z: 0.86, w: 0.0, top: 0.0, bot: 0.0, p: 2.0 },
   ];
   const jawMesh = new Mesh(track(loft(jawKeys, 28, 32, () => 0, 7)), jawMat);
+  jawMesh.name = "JawScales";
   jaw.add(jawMesh);
   // Mouth line: a thin dark slit with a faint glow, so the closed mouth still reads.
   const mouth = new Mesh(track(new SphereGeometry(1, 16, 8)), nostrilMat);
+  mouth.name = "MouthGlow";
   mouth.scale.set(0.135, 0.006, 0.36);
   mouth.position.set(0, 0.03, 0.42);
   jaw.add(mouth);
@@ -186,6 +194,7 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
   // ---- Fangs, from the upper jaw.
   for (const side of [-1, 1]) {
     const fang = new Mesh(track(new ConeGeometry(0.018, 0.09, 6)), fangMat);
+    fang.name = side < 0 ? "Fang_R" : "Fang_L";
     fang.position.set(side * 0.1, -0.06, 0.82);
     fang.rotation.x = Math.PI; // point down
     root.add(fang);
@@ -201,8 +210,10 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
     eye.position.set(side * 0.205, 0.13, 0.44);
     eye.rotation.set(-0.15, side * 0.55, side * -0.25);
     const ball = new Mesh(eyeGeo, eyeMaterial);
+    ball.name = `${name}_Glow`;
     ball.scale.set(0.05, 0.03, 0.075);
     const pupil = new Mesh(pupilGeo, dark);
+    pupil.name = `${name}_Pupil`;
     pupil.scale.set(0.008, 0.026, 0.02);
     pupil.position.set(side * 0.045, 0, 0.01);
     eye.add(ball, pupil);
@@ -210,6 +221,7 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
     eyes.push(eye);
     // Heavy brow ridge above each eye.
     const brow = new Mesh(track(taperedTube([new Vector3(side * 0.12, 0.25, 0.5), new Vector3(side * 0.22, 0.22, 0.42), new Vector3(side * 0.28, 0.24, 0.3)], 0.03, 0.012, 12, 6)), crystal);
+    brow.name = side < 0 ? "Brow_R" : "Brow_L";
     root.add(brow);
   }
 
@@ -233,6 +245,8 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
       track(taperedTube([new Vector3(side * 0.2, 0.22, 0.4), new Vector3(side * 0.27, 0.3, 0.32), new Vector3(side * 0.31, 0.37, 0.24)], 0.022, 0.003, 12, 6)),
       crystal,
     );
+    big.name = side < 0 ? "Horn_R" : "Horn_L";
+    small.name = side < 0 ? "BrowHorn_R" : "BrowHorn_L";
     horns.add(big, small);
   }
   root.add(horns);
@@ -240,6 +254,7 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
   // ---- Nostrils.
   for (const side of [-1, 1]) {
     const n = new Mesh(pupilGeo, nostrilMat);
+    n.name = side < 0 ? "Nostril_R" : "Nostril_L";
     n.scale.set(0.02, 0.012, 0.025);
     n.position.set(side * 0.055, 0.1, 0.96);
     root.add(n);
@@ -261,10 +276,24 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
         5,
       ),
     );
-    pivot.add(new Mesh(geo, whiskerMat));
+    const whisker = new Mesh(geo, whiskerMat);
+    whisker.name = `${name}_Strand`;
+    pivot.add(whisker);
     root.add(pivot);
     whiskers.push(pivot);
   }
+
+  const applySkin = (k: Skin) => {
+    applyScaleSkin(skullMat, k);
+    applyScaleSkin(jawMat, k);
+    crystal.color.set(k.body);
+    crystal.emissive.set(k.glow);
+    eyeMaterial.color.set(k.eyes).multiplyScalar(6);
+    whiskerMat.color.set(k.highlight).multiplyScalar(2.2);
+    nostrilMat.color.set(k.glow).multiplyScalar(3); // nostrils and mouth glow
+    fangMat.emissive.set(k.highlight); // fang tint
+  };
+  applySkin(skin);
 
   return {
     root,
@@ -273,5 +302,6 @@ export function buildPrototypeHead(skin: Skin, neckRadius: number, track: Resour
     scaleMaterials: [skullMat, jawMat],
     crystal,
     eyeMaterial,
+    applySkin,
   };
 }

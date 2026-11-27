@@ -7,7 +7,6 @@ import { updateBodyGeometry } from "./bodyGeometry";
 import { HeadPath, computeFramesInto, samplePathInto, type Frame, type Vec3 } from "./bodyPath";
 import { BODY_LENGTH, build, type Built } from "./dragonBuild";
 import { createRoute, slitherAt } from "./route";
-import { applySkin } from "./scaleMaterial";
 import { SKINS, type SkinId } from "./skins";
 import { QUALITY, type Quality } from "./quality";
 
@@ -39,14 +38,8 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
   useEffect(() => {
     if (!built) return;
     const skin = SKINS[skinId];
-    applySkin(built.bodyMat, skin);
-    for (const m of built.head.scaleMaterials) applySkin(m as ShaderMaterial, skin);
-    for (const c of built.crystals) {
-      c.color.set(skin.body);
-      c.emissive.set(skin.glow);
-    }
-    built.head.eyeMaterial.color.set(skin.eyes).multiplyScalar(6);
-    light.current?.color.set(skin.glow);
+    built.applySkin(skin); // every material: body, crest, fin, head, eyes, whiskers, nostrils, mouth, fangs
+    light.current?.color.set(skin.glow); // the dragon light
   }, [built, skinId]);
 
   // Seed the trail so the whole body is laid out along the route from the first frame.

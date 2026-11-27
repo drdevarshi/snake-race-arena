@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { BufferGeometry, Group, Material, Mesh, type Object3D } from "three";
+import { BufferGeometry, Color, Group, Material, Mesh, type Object3D } from "three";
 import { build, type Built } from "./dragonBuild";
 import { liveResources } from "./resources";
 import { QUALITY_ORDER } from "./quality";
+import { SKINS } from "./skins";
 
 /** Every distinct geometry and material reachable from the dragon's scene objects. */
 function collect(b: Built): { geometries: BufferGeometry[]; materials: Material[] } {
@@ -62,5 +63,46 @@ describe("Dragon build ownership (TB-2)", () => {
         expect(liveResources.count).toBe(start);
       }
     }
+  });
+});
+
+/** Every colour a skin controls, for each mesh in scene order: [label, r, g, b][]. */
+function skinColours(b: Built): [string, number, number, number][] {
+  const out: [string, number, number, number][] = [];
+  const push = (label: string, c: { r: number; g: number; b: number }) => out.push([label, c.r, c.g, c.b]);
+  for (const root of [b.body, b.ridges, b.fin, b.head.root] as Object3D[]) {
+    root.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        const label = `${o.name || o.type}:${m.type}`;
+        const u = (m as { uniforms?: Record<string, { value: unknown }> }).uniforms;
+        if (u) for (const k of ["uGlow", "uHighlight", "uBody", "uBelly", "uHot", "uDragonLightColor"]) push(`${label}.${k}`, u[k].value as Color);
+        if ("color" in m) push(`${label}.color`, (m as unknown as { color: Color }).color);
+        if ("emissive" in m) push(`${label}.emissive`, (m as unknown as { emissive: Color }).emissive);
+      }
+    });
+  }
+  return out;
+}
+
+describe("skin switching", () => {
+  it.each([
+    ["neon-magenta", "electric-cyan"],
+    ["neon-magenta", "neon-emerald"],
+    ["electric-cyan", "neon-magenta"],
+  ] as const)("switching %s → %s matches a fresh build in the new skin", (from, to) => {
+    const switched = build(from, "medium");
+    const before = skinColours(switched);
+    switched.applySkin(SKINS[to]);
+    const fresh = build(to, "medium");
+    const after = skinColours(switched);
+    expect(after).toEqual(skinColours(fresh));
+    // Every part named in the review must actually have changed colour.
+    const changed = (label: string) => after.some(([l, ...c], i) => l.startsWith(label) && c.join() !== before[i].slice(1).join());
+    for (const part of ["Skull", "JawScales", "Horn_L", "Brow_L", "Eye_L_Glow", "Whisker_L_Strand", "Nostril_L", "MouthGlow", "Fang_L"]) {
+      expect(changed(part), part).toBe(true);
+    }
+    switched.dispose();
+    fresh.dispose();
   });
 });
