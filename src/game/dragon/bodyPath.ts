@@ -25,8 +25,6 @@ export const normalize = (a: Vec3): Vec3 => {
 export const lerp = (a: Vec3, b: Vec3, t: number): Vec3 =>
   v3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
 
-const WORLD_UP = v3(0, 1, 0);
-
 /**
  * Trail of head positions, newest first in logical order. Points closer than `minStep` to the
  * previous one are skipped, so a stationary head does not fill the buffer. The trail is trimmed
@@ -88,16 +86,27 @@ export class HeadPath {
 
   /** Point at arc-length `d` behind the newest point. Beyond the trail it extends straight back. */
   sampleBack(d: number): Vec3 {
+    return this.sampleBackInto(d, v3());
+  }
+
+  /** Same as sampleBack, written into `out` (no allocation; used every frame). */
+  sampleBackInto(d: number, out: Vec3): Vec3 {
     const n = this.pts.length;
-    if (n === 0) return v3();
-    if (n === 1) return this.pts[0];
+    if (n === 0) return set(out, 0, 0, 0);
+    if (n === 1) return set(out, this.pts[0].x, this.pts[0].y, this.pts[0].z);
     const target = this.totalLength - d;
     if (target <= 0) {
       // Extend past the oldest point along the first segment's direction.
-      const dir = normalize(sub(this.pts[0], this.pts[1]));
-      return add(this.pts[0], scale(dir, -target));
+      const a = this.pts[0];
+      const b = this.pts[1];
+      const len = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) || 1;
+      const k = -target / len;
+      return set(out, a.x + (a.x - b.x) * k, a.y + (a.y - b.y) * k, a.z + (a.z - b.z) * k);
     }
-    if (d <= 0) return this.pts[n - 1];
+    if (d <= 0) {
+      const h = this.pts[n - 1];
+      return set(out, h.x, h.y, h.z);
+    }
     // Binary search for the segment containing `target`.
     let lo = 0;
     let hi = n - 1;
@@ -108,14 +117,29 @@ export class HeadPath {
     }
     const segLen = this.cum[hi] - this.cum[lo];
     const t = segLen > 0 ? (target - this.cum[lo]) / segLen : 0;
-    return lerp(this.pts[lo], this.pts[hi], t);
+    const a = this.pts[lo];
+    const b = this.pts[hi];
+    return set(out, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
   }
+}
+
+function set(o: Vec3, x: number, y: number, z: number): Vec3 {
+  o.x = x;
+  o.y = y;
+  o.z = z;
+  return o;
 }
 
 /** `count` points spaced `spacing` apart along the trail, from the head (index 0) backwards. */
 export function samplePath(path: HeadPath, count: number, spacing: number): Vec3[] {
   const out: Vec3[] = new Array(count);
   for (let i = 0; i < count; i++) out[i] = path.sampleBack(i * spacing);
+  return out;
+}
+
+/** Same as samplePath, written into the existing points of `out` (its length is the count). */
+export function samplePathInto(path: HeadPath, out: Vec3[], spacing: number): Vec3[] {
+  for (let i = 0; i < out.length; i++) path.sampleBackInto(i * spacing, out[i]);
   return out;
 }
 
@@ -128,17 +152,6 @@ export type Frame = {
   b: Vec3;
 };
 
-/** Rotates `v` by the smallest rotation that takes unit vector `from` to unit vector `to`. */
-function rotateBetween(v: Vec3, from: Vec3, to: Vec3): Vec3 {
-  const axis = cross(from, to);
-  const s = length(axis);
-  const c = dot(from, to);
-  if (s < 1e-9) return c > 0 ? v : scale(v, -1); // parallel or opposite
-  const k = scale(axis, 1 / s);
-  // Rodrigues' rotation formula.
-  return add(add(scale(v, c), scale(cross(k, v), s)), scale(k, dot(k, v) * (1 - c)));
-}
-
 /**
  * Orientation frames along the sampled points (index 0 = head).
  *
@@ -148,26 +161,83 @@ function rotateBetween(v: Vec3, from: Vec3, to: Vec3): Vec3 {
  * twists, even when the body climbs vertically.
  */
 export function computeFrames(points: Vec3[]): Frame[] {
+  const frames: Frame[] = points.map(() => ({ t: v3(), n: v3(), b: v3() }));
+  return computeFramesInto(points, frames);
+}
+
+/**
+ * Same as computeFrames, written into existing frames (one per point) with plain arithmetic, so
+ * the per-frame body update creates no garbage for the phone to collect.
+ */
+export function computeFramesInto(points: Vec3[], frames: Frame[]): Frame[] {
   const n = points.length;
-  const frames: Frame[] = new Array(n);
   if (n === 0) return frames;
-  const tangents: Vec3[] = new Array(n);
+  let ptx = 0, pty = 0, ptz = 0; // previous tangent
+  let nx = 0, ny = 0, nz = 0; // transported normal
   for (let i = 0; i < n; i++) {
     const ahead = points[Math.max(0, i - 1)];
     const behind = points[Math.min(n - 1, i + 1)];
-    tangents[i] = normalize(sub(ahead, behind));
-  }
-  const t0 = tangents[0];
-  let up = sub(WORLD_UP, scale(t0, dot(WORLD_UP, t0)));
-  if (length(up) < 1e-6) up = sub(v3(0, 0, 1), scale(t0, t0.z)); // head pointing straight up/down
-  let nrm = normalize(up);
-  frames[0] = { t: t0, n: nrm, b: normalize(cross(t0, nrm)) };
-  for (let i = 1; i < n; i++) {
-    const t = tangents[i];
-    nrm = rotateBetween(nrm, tangents[i - 1], t);
-    // Re-orthogonalise against floating-point drift.
-    nrm = normalize(sub(nrm, scale(t, dot(nrm, t))));
-    frames[i] = { t, n: nrm, b: normalize(cross(t, nrm)) };
+    let tx = ahead.x - behind.x, ty = ahead.y - behind.y, tz = ahead.z - behind.z;
+    const tl = Math.hypot(tx, ty, tz);
+    if (tl > 1e-12) {
+      tx /= tl;
+      ty /= tl;
+      tz /= tl;
+    } else {
+      tx = 0;
+      ty = 0;
+      tz = 1;
+    }
+    if (i === 0) {
+      // World up projected onto the cross-section; fallback when the head points straight up/down.
+      nx = -ty * tx;
+      ny = 1 - ty * ty;
+      nz = -ty * tz;
+      if (Math.hypot(nx, ny, nz) < 1e-6) {
+        nx = -tz * tx;
+        ny = -tz * ty;
+        nz = 1 - tz * tz;
+      }
+    } else {
+      // Rotate the previous normal by the minimal rotation from the previous tangent to this one.
+      const ax = pty * tz - ptz * ty, ay = ptz * tx - ptx * tz, az = ptx * ty - pty * tx;
+      const s = Math.hypot(ax, ay, az);
+      const c = ptx * tx + pty * ty + ptz * tz;
+      if (s >= 1e-9) {
+        const kx = ax / s, ky = ay / s, kz = az / s;
+        const kv = kx * nx + ky * ny + kz * nz;
+        const cx = ky * nz - kz * ny, cy = kz * nx - kx * nz, cz = kx * ny - ky * nx;
+        const rx = nx * c + cx * s + kx * kv * (1 - c);
+        const ry = ny * c + cy * s + ky * kv * (1 - c);
+        const rz = nz * c + cz * s + kz * kv * (1 - c);
+        nx = rx;
+        ny = ry;
+        nz = rz;
+      } else if (c < 0) {
+        nx = -nx;
+        ny = -ny;
+        nz = -nz;
+      }
+      // Re-orthogonalise against floating-point drift.
+      const d = nx * tx + ny * ty + nz * tz;
+      nx -= tx * d;
+      ny -= ty * d;
+      nz -= tz * d;
+    }
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl;
+    ny /= nl;
+    nz /= nl;
+    const f = frames[i];
+    set(f.t, tx, ty, tz);
+    set(f.n, nx, ny, nz);
+    // b = t × n
+    const bx = ty * nz - tz * ny, by = tz * nx - tx * nz, bz = tx * ny - ty * nx;
+    const bl = Math.hypot(bx, by, bz) || 1;
+    set(f.b, bx / bl, by / bl, bz / bl);
+    ptx = tx;
+    pty = ty;
+    ptz = tz;
   }
   return frames;
 }

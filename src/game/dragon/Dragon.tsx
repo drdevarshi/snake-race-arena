@@ -2,123 +2,17 @@
 
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  BufferAttribute,
-  BufferGeometry,
-  Color,
-  DoubleSide,
-  InstancedMesh,
-  Matrix4,
-  Mesh,
-  MeshStandardMaterial,
-  PointLight,
-  Shape,
-  ShapeGeometry,
-  Vector3,
-  type ShaderMaterial,
-} from "three";
-import { createBodyGeometry, updateBodyGeometry } from "./bodyGeometry";
-import { HeadPath, computeFrames, radiusProfile, samplePath, type Frame, type Vec3 } from "./bodyPath";
-import { buildPrototypeHead, type PrototypeHead } from "./prototypeHead";
-import { createCountedTracker } from "./resources";
+import { Matrix4, PointLight, Vector3, type ShaderMaterial } from "three";
+import { updateBodyGeometry } from "./bodyGeometry";
+import { HeadPath, computeFramesInto, samplePathInto, type Frame, type Vec3 } from "./bodyPath";
+import { BODY_LENGTH, build, type Built } from "./dragonBuild";
 import { createRoute, slitherAt } from "./route";
-import { applySkin, createScaleMaterial } from "./scaleMaterial";
+import { applySkin } from "./scaleMaterial";
 import { SKINS, type SkinId } from "./skins";
-import type { Quality } from "./quality";
-import { QUALITY } from "./quality";
+import { QUALITY, type Quality } from "./quality";
 
-/** Body radius at its thickest point (metres). */
-export const MAX_RADIUS = 0.4;
-/** Body length from neck to tail tip (metres). Fixed, as in competitive modes. */
-export const BODY_LENGTH = 7.8;
 /** Head speed along the showcase route (metres per second). */
 const SPEED = 2.3;
-/** Scale rows per metre along the body. */
-const SCALES_ALONG = 3.6;
-/** Scales around the body. */
-const SCALES_AROUND = 9;
-
-/** Crystal back-ridge blade: a flattened shard leaning back, base on the spine. */
-function createBladeGeometry(): BufferGeometry {
-  // A front, B back, C/D sides, T tip (leaning towards the tail, -Z).
-  const v = [
-    [0, 0, 0.6],
-    [0, 0, -0.45],
-    [0.13, 0.08, 0],
-    [-0.13, 0.08, 0],
-    [0, 1, -0.6],
-  ];
-  const faces = [
-    [0, 2, 4],
-    [2, 1, 4],
-    [1, 3, 4],
-    [3, 0, 4],
-  ];
-  const pos: number[] = [];
-  for (const f of faces) for (const i of f) pos.push(...v[i]);
-  const g = new BufferGeometry();
-  g.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
-  g.computeVertexNormals(); // non-indexed → flat crystal facets
-  return g;
-}
-
-/** Tail fin: a leaf shape standing upright, trailing behind the tail tip. */
-function createFinGeometry(): BufferGeometry {
-  const s = new Shape();
-  s.moveTo(0, 0);
-  s.bezierCurveTo(0.35, 0.18, 0.75, 0.22, 1.05, 0);
-  s.bezierCurveTo(0.75, -0.2, 0.35, -0.16, 0, 0);
-  const g = new ShapeGeometry(s, 12);
-  // Shape lies in XY with length along +X; stand it in the YZ plane trailing along -Z.
-  g.rotateY(Math.PI / 2);
-  return g;
-}
-
-type Built = {
-  body: Mesh;
-  bodyMat: ShaderMaterial;
-  ridges: InstancedMesh;
-  ridgeRings: number[];
-  fin: Mesh;
-  head: PrototypeHead;
-  crystals: MeshStandardMaterial[];
-  dispose: () => void;
-};
-
-function build(skinId: SkinId, quality: Quality): Built {
-  const q = QUALITY[quality];
-  const skin = SKINS[skinId];
-  const tracker = createCountedTracker();
-  const spacing = BODY_LENGTH / (q.rings - 1);
-
-  const bodyGeo = tracker.track(createBodyGeometry(q.rings, spacing, 1));
-  const bodyMat = tracker.track(createScaleMaterial({ skin, repeat: [SCALES_AROUND, SCALES_ALONG], useAlong: true }));
-  const body = new Mesh(bodyGeo, bodyMat);
-  body.frustumCulled = false;
-
-  const crystal = tracker.track(
-    new MeshStandardMaterial({ color: new Color(skin.body), emissive: new Color(skin.glow), emissiveIntensity: 1.8, roughness: 0.2, metalness: 0.15, flatShading: true }),
-  );
-  const finMat = tracker.track(crystal.clone());
-  finMat.side = DoubleSide;
-  finMat.emissiveIntensity = 1.3;
-
-  // Ridges along the spine, from just behind the neck to about 88% of the body.
-  const ridgeRings: number[] = [];
-  const first = Math.round(q.rings * 0.03);
-  const last = Math.round(q.rings * 0.88);
-  const step = (last - first) / (q.ridges - 1);
-  for (let k = 0; k < q.ridges; k++) ridgeRings.push(Math.round(first + k * step));
-  const ridges = new InstancedMesh(tracker.track(createBladeGeometry()), crystal, q.ridges);
-  ridges.frustumCulled = false;
-
-  const fin = new Mesh(tracker.track(createFinGeometry()), finMat);
-  fin.frustumCulled = false;
-
-  const head = buildPrototypeHead(skin, MAX_RADIUS * radiusProfile(0), tracker.track);
-
-  return { body, bodyMat, ridges, ridgeRings, fin, head, crystals: [crystal, finMat, head.crystal], dispose: () => tracker.disposeAll() };
-}
 
 export type DragonProps = { skinId: SkinId; quality: Quality; paused: boolean };
 
@@ -163,13 +57,15 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
   }, [route]);
 
   const scratch = useMemo(
-    () => ({ m: new Matrix4(), x: new Vector3(), y: new Vector3(), z: new Vector3(), p: new Vector3(), scl: new Vector3() }),
+    () => ({ m: new Matrix4(), x: new Vector3(), y: new Vector3(), z: new Vector3(), p: new Vector3(), scl: new Vector3(), light: new Vector3() }),
     [],
   );
 
   useFrame((_, rawDelta) => {
     if (!built) return;
-    const q = QUALITY[quality];
+    // Sizes come from the build itself: for a frame after a quality switch, `built` can still be
+    // the previous tier's while the `quality` prop is already the new one.
+    const rings = built.work.pts.length;
     const st = sim.current;
     const dt = Math.min(rawDelta, 0.1);
     if (!paused) {
@@ -178,10 +74,10 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
       st.path.push(slitherAt(route, st.s));
     }
 
-    const spacing = BODY_LENGTH / (q.rings - 1);
-    const pts = samplePath(st.path, q.rings, spacing);
-    const frames = computeFrames(pts);
-    const radii = pts.map((_, i) => MAX_RADIUS * radiusProfile(i / (q.rings - 1)));
+    const spacing = BODY_LENGTH / (rings - 1);
+    const { pts, frames, radii } = built.work;
+    samplePathInto(st.path, pts, spacing);
+    computeFramesInto(pts, frames);
     updateBodyGeometry(built.body.geometry, pts, frames, radii);
 
     const place = (obj: { matrix: Matrix4 } | null, p: Vec3, f: Frame, offset = 0, size = 1) => {
@@ -199,7 +95,7 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
 
     // Ridges: on the spine, shrinking towards the tail.
     built.ridgeRings.forEach((i, k) => {
-      const u = i / (q.rings - 1);
+      const u = i / (rings - 1);
       // Tallest behind the head, shrinking to the tail, alternating tall/short like a crest.
       const size = radii[i] * (1.15 - 0.55 * u) * (k % 2 === 0 ? 1 : 0.62);
       built.ridges.setMatrixAt(k, place(null, pts[i], frames[i], radii[i] * 0.78, size));
@@ -207,7 +103,7 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
     built.ridges.instanceMatrix.needsUpdate = true;
 
     // Tail fin at the tip; head at the neck ring.
-    const lastI = q.rings - 1;
+    const lastI = rings - 1;
     built.fin.matrixAutoUpdate = false;
     place(built.fin, pts[lastI], frames[lastI], 0, 0.55);
     const headRoot = built.head.root;
@@ -223,11 +119,13 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
 
     // The dragon is the main light: a glow just above the head.
     const f0 = frames[0];
-    const lp = { x: pts[0].x + f0.n.x * 0.4 + f0.t.x * 0.3, y: pts[0].y + f0.n.y * 0.4 + f0.t.y * 0.3, z: pts[0].z + f0.n.z * 0.4 + f0.t.z * 0.3 };
+    const lp = scratch.light.set(pts[0].x + f0.n.x * 0.4 + f0.t.x * 0.3, pts[0].y + f0.n.y * 0.4 + f0.t.y * 0.3, pts[0].z + f0.n.z * 0.4 + f0.t.z * 0.3);
     light.current?.position.set(lp.x, lp.y, lp.z);
-    for (const m of [built.bodyMat, ...(built.head.scaleMaterials as ShaderMaterial[])]) {
+    const mats = built.head.scaleMaterials as ShaderMaterial[];
+    for (let i = -1; i < mats.length; i++) {
+      const m = i < 0 ? built.bodyMat : mats[i];
       m.uniforms.uTime.value = t;
-      m.uniforms.uDragonLightPos.value.set(lp.x, lp.y, lp.z);
+      m.uniforms.uDragonLightPos.value.copy(lp);
     }
   });
 

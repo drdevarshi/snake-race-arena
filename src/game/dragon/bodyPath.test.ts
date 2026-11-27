@@ -143,3 +143,21 @@ describe("radiusProfile", () => {
     expect(radiusProfile(2)).toBe(radiusProfile(1));
   });
 });
+
+describe("allocation-free versions", () => {
+  it("samplePathInto and computeFramesInto match the plain versions exactly", async () => {
+    const { samplePathInto, computeFramesInto } = await import("./bodyPath");
+    const p = drive(helix, 1500, 0.005, 40);
+    const plain = samplePath(p, 90, 0.12);
+    const into = samplePathInto(p, Array.from({ length: 90 }, () => v3()), 0.12);
+    expect(into).toEqual(plain);
+    const frames = Array.from({ length: 90 }, () => ({ t: v3(), n: v3(), b: v3() }));
+    // Fill twice: reused objects must not carry state from the previous frame.
+    computeFramesInto(samplePath(drive(eight, 900, 0.005, 40), 90, 0.12), frames);
+    computeFramesInto(into, frames);
+    const ref = computeFrames(plain);
+    for (let i = 0; i < 90; i++) {
+      for (const k of ["t", "n", "b"] as const) expect(distance(frames[i][k], ref[i][k])).toBeLessThan(1e-12);
+    }
+  });
+});

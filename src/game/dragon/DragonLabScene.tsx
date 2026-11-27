@@ -1,11 +1,12 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { MeshReflectorMaterial, OrbitControls, Sparkles } from "@react-three/drei";
+import { OrbitControls, Sparkles } from "@react-three/drei";
 import { Bloom, EffectComposer, ToneMapping } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
-import { useEffect, useMemo, useRef } from "react";
-import { FogExp2, REVISION } from "three";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FogExp2, REVISION, type PerspectiveCamera } from "three";
+import { createWaterMirror, type WaterMirror } from "./waterMirror";
 import r3fPackage from "@react-three/fiber/package.json";
 import { Dragon } from "./Dragon";
 import { QUALITY, type Quality } from "./quality";
@@ -48,6 +49,20 @@ const TRUNKS: [number, number, number][] = [
   [1.5, -7.2, 0.35],
 ];
 
+/** Mirror water on High; created and released with the effect, so switching tiers leaks nothing. */
+function Mirror() {
+  const [w, setW] = useState<WaterMirror | null>(null);
+  useEffect(() => {
+    const m = createWaterMirror(70, 512);
+    setW(m);
+    return () => {
+      setW(null);
+      m.dispose();
+    };
+  }, []);
+  return w ? <primitive object={w.mirror} dispose={null} /> : null;
+}
+
 function Stage({ quality, skinId }: { quality: Quality; skinId: SkinId }) {
   const q = QUALITY[quality];
   const scene = useThree((s) => s.scene);
@@ -65,26 +80,12 @@ function Stage({ quality, skinId }: { quality: Quality; skinId: SkinId }) {
       <hemisphereLight args={["#4a52a0", "#08080a", 2.2]} />
       <directionalLight position={[-6, 12, 4]} intensity={1.4} color="#8fa3ff" />
 
-      {/* Shallow water floor. Mirror reflections on High only; they render the scene twice. */}
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]}>
+      {/* Shallow water floor. A true mirror on High only (it renders the scene twice); a dark,
+          slightly rough surface elsewhere so the dragon's light spreads softly instead of a hot spot. */}
+      {q.reflections && <Mirror />}
+      <mesh rotation-x={-Math.PI / 2} position={[0, q.reflections ? 0.01 : 0, 0]}>
         <planeGeometry args={[70, 70]} />
-        {q.reflections ? (
-          <MeshReflectorMaterial
-            resolution={512}
-            mirror={0.85}
-            blur={[160, 50]}
-            mixBlur={1}
-            mixStrength={4}
-            depthScale={0.6}
-            minDepthThreshold={0.4}
-            maxDepthThreshold={1.2}
-            roughness={0.85}
-            metalness={0.55}
-            color="#07070d"
-          />
-        ) : (
-          <meshStandardMaterial color="#06060b" roughness={0.35} metalness={0.6} />
-        )}
+        <meshStandardMaterial color="#06060b" roughness={0.75} metalness={0.25} transparent={q.reflections} opacity={q.reflections ? 0.55 : 1} />
       </mesh>
 
       {TRUNKS.map(([x, z, r], i) => (
@@ -109,7 +110,10 @@ function CameraFit() {
   const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
   useEffect(() => {
     const base = 10.1; // distance that frames the route at 16:10
-    const dist = aspect >= 1.3 ? base : base * Math.pow(1.3 / aspect, 0.85);
+    // Narrow screens: widen the view a little and move back only partly, so the dragon stays big.
+    const portrait = aspect < 1;
+    if ("fov" in camera) (camera as PerspectiveCamera).fov = portrait ? 58 : 48;
+    const dist = aspect >= 1.3 ? base : base * Math.pow(1.3 / aspect, portrait ? 0.45 : 0.85);
     const dir = camera.position.clone().setY(camera.position.y - 0.9).normalize();
     camera.position.set(dir.x * dist, 0.9 + dir.y * dist, dir.z * dist);
     camera.updateProjectionMatrix();

@@ -82,7 +82,7 @@ export function DragonLabClient() {
     }`;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto max-w-7xl px-4 pb-28 pt-6 sm:px-6 sm:pb-8 sm:pt-8">
       <header className="mb-4">
         <h1 className="font-display text-3xl font-black uppercase sm:text-4xl">
           <span className="text-neon-gradient">{t("dragonLab.title")}</span>

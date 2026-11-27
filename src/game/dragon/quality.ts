@@ -19,7 +19,7 @@ export type QualitySettings = {
 
 export const QUALITY: Record<Quality, QualitySettings> = {
   low: { rings: 80, ridges: 16, dpr: [1, 1], bloom: false, reflections: false, multisampling: 0, sparks: 30, dragonLight: 14 },
-  medium: { rings: 120, ridges: 22, dpr: [1, 1.5], bloom: true, reflections: false, multisampling: 0, sparks: 60, dragonLight: 18 },
+  medium: { rings: 120, ridges: 22, dpr: [1, 1.5], bloom: true, reflections: false, multisampling: 0, sparks: 60, dragonLight: 15 },
   high: { rings: 170, ridges: 28, dpr: [1, 2], bloom: true, reflections: true, multisampling: 4, sparks: 120, dragonLight: 22 },
 };
 
