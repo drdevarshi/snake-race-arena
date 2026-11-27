@@ -82,7 +82,8 @@ const fragment = /* glsl */ `
     // ---- Belly mask
     float belly;
     if (uBellyFromNormal > 0.5) {
-      belly = smoothstep(-0.25, -0.6, normalize(vObjNormal).y);
+      // Previously written with reversed edges (-0.25 then -0.6), which GLSL leaves undefined. Same curve.
+      belly = 1.0 - smoothstep(-0.6, -0.25, normalize(vObjNormal).y);
     } else {
       belly = 1.0 - smoothstep(0.13, 0.21, abs(vUv.x - 0.5));
     }
