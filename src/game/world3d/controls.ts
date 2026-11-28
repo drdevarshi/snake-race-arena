@@ -12,9 +12,9 @@ export type InputFrame = {
   turn: number;
   /** −8 (full back) … +8 (full forward). */
   throttle: number;
-  /** Climb (Space / Up button). */
+  /** Climb (Space or ↑ / Up button). */
   up: boolean;
-  /** Descend (Shift or C / Down button). */
+  /** Descend (Shift, C or ↓ / Down button). */
   down: boolean;
   /** Boost while held (E / Boost button). */
   boost: boolean;

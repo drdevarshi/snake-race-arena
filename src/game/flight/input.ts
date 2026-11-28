@@ -1,7 +1,8 @@
 /**
  * Turns keys, the on-screen joystick and buttons into the engine's integer InputFrame.
  *
- * Keyboard: W/S or ↑/↓ throttle, A/D or ←/→ turn, Space climb, Shift or C descend, E boost.
+ * Keyboard: W/S speed, A/D or ←/→ turn, ↑ or Space climb, ↓ or Shift or C descend, E boost.
+ * (↑/↓ climb and descend, like the Up and Down buttons on the phone.)
  * Phone: the left joystick turns (sideways) and sets the throttle (up/down); Up, Down and Boost
  * buttons on the right can be held at the same time as the joystick.
  */
@@ -51,13 +52,13 @@ export function axis(v: number): number {
 export function frameFrom(keys: KeyState, touch: TouchState): InputFrame {
   const has = (...codes: string[]) => codes.some((c) => keys.has(c));
   const keyTurn = (has("KeyD", "ArrowRight") ? AXIS_MAX : 0) - (has("KeyA", "ArrowLeft") ? AXIS_MAX : 0);
-  const keyThrottle = (has("KeyW", "ArrowUp") ? AXIS_MAX : 0) - (has("KeyS", "ArrowDown") ? AXIS_MAX : 0);
+  const keyThrottle = (has("KeyW") ? AXIS_MAX : 0) - (has("KeyS") ? AXIS_MAX : 0);
   const clampAxis = (v: number) => Math.max(-AXIS_MAX, Math.min(AXIS_MAX, v)) || 0;
   return {
     turn: clampAxis(keyTurn + axis(touch.stickX)),
     throttle: clampAxis(keyThrottle + axis(touch.stickY)),
-    up: has("Space") || touch.up,
-    down: has("ShiftLeft", "ShiftRight", "KeyC") || touch.down,
+    up: has("Space", "ArrowUp") || touch.up,
+    down: has("ShiftLeft", "ShiftRight", "KeyC", "ArrowDown") || touch.down,
     boost: has("KeyE") || touch.boost,
   };
 }

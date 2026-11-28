@@ -71,7 +71,10 @@ describe("flight session", () => {
 describe("controls mapping", () => {
   it("keys give full-scale axes and the buttons", () => {
     expect(frameFrom(new Set(["KeyW", "KeyD", "Space"]), NO_TOUCH)).toEqual({ turn: 8, throttle: 8, up: true, down: false, boost: false });
-    expect(frameFrom(new Set(["ArrowDown", "ArrowLeft", "ShiftLeft", "KeyE"]), NO_TOUCH)).toEqual({ turn: -8, throttle: -8, up: false, down: true, boost: true });
+    expect(frameFrom(new Set(["KeyS", "ArrowLeft", "ShiftLeft", "KeyE"]), NO_TOUCH)).toEqual({ turn: -8, throttle: -8, up: false, down: true, boost: true });
+    // Arrow up/down climb and descend (like the phone's Up/Down buttons); they don't change speed.
+    expect(frameFrom(new Set(["ArrowUp"]), NO_TOUCH)).toEqual({ ...NEUTRAL, up: true });
+    expect(frameFrom(new Set(["ArrowDown", "ArrowRight"]), NO_TOUCH)).toEqual({ ...NEUTRAL, turn: 8, down: true });
     expect(frameFrom(new Set(["KeyA", "KeyD"]), NO_TOUCH)).toEqual(NEUTRAL);
   });
 

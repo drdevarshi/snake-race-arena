@@ -6,6 +6,7 @@ import { Matrix4, PointLight, Vector3, type ShaderMaterial } from "three";
 import { updateBodyGeometry } from "./bodyGeometry";
 import { HeadPath, computeFramesInto, samplePathInto, type Frame, type Vec3 } from "./bodyPath";
 import { BODY_LENGTH, build, type Built } from "./dragonBuild";
+import { createFollowState, followStep } from "./follow";
 import { createRoute, slitherAt } from "./route";
 import { SKINS, type SkinId } from "./skins";
 import { QUALITY, type Quality } from "./quality";
@@ -30,16 +31,12 @@ export type DragonProps = {
   scale?: number;
 };
 
-/** Gentle side-to-side slither added while following (in dragon metres). */
-const WAVE_AMPLITUDE = 0.12;
-const WAVE_LENGTH = 3.5;
-
 export function Dragon({ skinId, quality, paused, follow, scale = 1 }: DragonProps) {
   const [built, setBuilt] = useState<Built | null>(null);
   const route = useMemo(() => createRoute(), []);
   const light = useRef<PointLight>(null);
   // Motion state lives in refs: it changes every frame and must not re-render React.
-  const sim = useRef({ s: 0, time: 0, path: new HeadPath(BODY_LENGTH + 2, 0.008), reset: Number.NaN, travelled: 0, last: { x: 0, z: 0 } });
+  const sim = useRef({ s: 0, time: 0, path: new HeadPath(BODY_LENGTH + 2, 0.008), follow: createFollowState(BODY_LENGTH) });
 
   // Build GPU resources in an effect so Strict Mode's mount → unmount → mount stays balanced.
   // Rebuilt only when the quality tier changes; skin changes are applied in place below.
@@ -84,24 +81,7 @@ export function Dragon({ skinId, quality, paused, follow, scale = 1 }: DragonPro
     const f = follow?.current;
     if (follow) {
       if (!f) return;
-      const hx = f.x / scale;
-      const hy = f.y / scale;
-      const hz = f.z / scale;
-      const fx = Math.sin(f.yaw);
-      const fz = Math.cos(f.yaw);
-      if (f.reset !== st.reset) {
-        // New flight or replay: lay the body out straight behind the head.
-        st.reset = f.reset;
-        st.travelled = 0;
-        st.path.clear();
-        for (let d = BODY_LENGTH + 1; d >= 0; d -= 0.02) st.path.push({ x: hx - fx * d, y: hy, z: hz - fz * d });
-      } else {
-        st.travelled += Math.hypot(hx - st.last.x, hz - st.last.z);
-      }
-      st.last = { x: hx, z: hz };
-      // Slither: a small sideways wave along the distance flown (none while hovering).
-      const wave = WAVE_AMPLITUDE * Math.sin((st.travelled / WAVE_LENGTH) * Math.PI * 2);
-      st.path.push({ x: hx + fz * wave, y: hy, z: hz - fx * wave });
+      followStep(st.follow, { x: f.x / scale, y: f.y / scale, z: f.z / scale, yaw: f.yaw, reset: f.reset }, BODY_LENGTH);
       if (!paused) st.time += dt;
     } else if (!paused) {
       st.s += SPEED * dt;
@@ -111,7 +91,7 @@ export function Dragon({ skinId, quality, paused, follow, scale = 1 }: DragonPro
 
     const spacing = BODY_LENGTH / (rings - 1);
     const { pts, frames, radii } = built.work;
-    samplePathInto(st.path, pts, spacing);
+    samplePathInto(follow ? st.follow.path : st.path, pts, spacing);
     computeFramesInto(pts, frames);
     updateBodyGeometry(built.body.geometry, pts, frames, radii);
 

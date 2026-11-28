@@ -137,7 +137,10 @@ export function FlightClient() {
     el.addEventListener("touchmove", stop, { passive: false });
     el.addEventListener("gesturestart", stop);
     el.addEventListener("dblclick", stop);
+    // The mouse wheel over the flight view must not scroll the page away from the game.
+    el.addEventListener("wheel", stop, { passive: false });
     return () => {
+      el.removeEventListener("wheel", stop);
       el.removeEventListener("touchmove", stop);
       el.removeEventListener("gesturestart", stop);
       el.removeEventListener("dblclick", stop);
@@ -262,8 +265,10 @@ export function FlightClient() {
           />
         )}
 
-        {/* HUD */}
-        <div className="pointer-events-none absolute left-2 top-2 rounded-lg bg-black/55 px-2.5 py-1.5 font-mono text-[11px] leading-4 text-slate-100">
+        {/* Top overlay. Phones: buttons on top, readouts below them (no overlap). Wider screens: side by side. */}
+        <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-col-reverse items-start gap-1.5 sm:flex-row sm:justify-between">
+          {/* HUD */}
+          <div className="pointer-events-none max-w-full rounded-lg bg-black/55 px-2.5 py-1.5 font-mono text-[11px] leading-4 text-slate-100">
           <div>
             {t("dragonFlight.hud.speed")}: {hud ? hud.speed.toFixed(0) : "–"} m/s · {t("dragonFlight.hud.altitude")}: {hud ? hud.altitude.toFixed(0) : "–"} m
           </div>
@@ -310,8 +315,8 @@ export function FlightClient() {
           )}
         </div>
 
-        {/* Top-right buttons */}
-        <div className="pointer-events-none absolute right-2 top-2 flex max-w-[60%] flex-wrap justify-end gap-1.5">
+          {/* Buttons */}
+          <div className="pointer-events-none flex w-full flex-wrap justify-end gap-1.5 sm:w-auto sm:max-w-[60%]">
           <button type="button" className={pill(paused)} aria-pressed={paused} onClick={() => setPaused((p) => !p)}>
             {paused ? t("dragonLab.play") : t("dragonLab.pause")}
           </button>
@@ -359,6 +364,8 @@ export function FlightClient() {
               </button>
             </div>
           )}
+        </div>
+
         </div>
 
         {paused && (
