@@ -13,14 +13,33 @@ import { QUALITY, type Quality } from "./quality";
 /** Head speed along the showcase route (metres per second). */
 const SPEED = 2.3;
 
-export type DragonProps = { skinId: SkinId; quality: Quality; paused: boolean };
+/**
+ * Where an outside driver (the flight sandbox) wants the head this frame, in world metres.
+ * `yaw` (radians, 0 faces +z) lays the body out straight behind the head whenever `reset`
+ * changes (a new flight or a replay); `bank` (radians) leans the head into turns.
+ */
+export type DragonFollow = { x: number; y: number; z: number; yaw: number; bank: number; reset: number };
 
-export function Dragon({ skinId, quality, paused }: DragonProps) {
+export type DragonProps = {
+  skinId: SkinId;
+  quality: Quality;
+  paused: boolean;
+  /** When given, the head follows this instead of the showcase route. Read every frame. */
+  follow?: { current: DragonFollow | null };
+  /** World metres per Dragon Lab metre (the lab dragon is 7.8 m long). Default 1. */
+  scale?: number;
+};
+
+/** Gentle side-to-side slither added while following (in dragon metres). */
+const WAVE_AMPLITUDE = 0.12;
+const WAVE_LENGTH = 3.5;
+
+export function Dragon({ skinId, quality, paused, follow, scale = 1 }: DragonProps) {
   const [built, setBuilt] = useState<Built | null>(null);
   const route = useMemo(() => createRoute(), []);
   const light = useRef<PointLight>(null);
   // Motion state lives in refs: it changes every frame and must not re-render React.
-  const sim = useRef({ s: 0, time: 0, path: new HeadPath(BODY_LENGTH + 2, 0.008) });
+  const sim = useRef({ s: 0, time: 0, path: new HeadPath(BODY_LENGTH + 2, 0.008), reset: Number.NaN, travelled: 0, last: { x: 0, z: 0 } });
 
   // Build GPU resources in an effect so Strict Mode's mount → unmount → mount stays balanced.
   // Rebuilt only when the quality tier changes; skin changes are applied in place below.
@@ -44,13 +63,14 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
 
   // Seed the trail so the whole body is laid out along the route from the first frame.
   useEffect(() => {
+    if (follow) return; // laid out from the first followed position instead
     const { path } = sim.current;
     path.clear();
     for (let s = -BODY_LENGTH - 1; s <= sim.current.s; s += 0.02) path.push(slitherAt(route, s));
-  }, [route]);
+  }, [route, follow]);
 
   const scratch = useMemo(
-    () => ({ m: new Matrix4(), x: new Vector3(), y: new Vector3(), z: new Vector3(), p: new Vector3(), scl: new Vector3(), light: new Vector3() }),
+    () => ({ m: new Matrix4(), roll: new Matrix4(), x: new Vector3(), y: new Vector3(), z: new Vector3(), p: new Vector3(), scl: new Vector3(), light: new Vector3() }),
     [],
   );
 
@@ -61,7 +81,29 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
     const rings = built.work.pts.length;
     const st = sim.current;
     const dt = Math.min(rawDelta, 0.1);
-    if (!paused) {
+    const f = follow?.current;
+    if (follow) {
+      if (!f) return;
+      const hx = f.x / scale;
+      const hy = f.y / scale;
+      const hz = f.z / scale;
+      const fx = Math.sin(f.yaw);
+      const fz = Math.cos(f.yaw);
+      if (f.reset !== st.reset) {
+        // New flight or replay: lay the body out straight behind the head.
+        st.reset = f.reset;
+        st.travelled = 0;
+        st.path.clear();
+        for (let d = BODY_LENGTH + 1; d >= 0; d -= 0.02) st.path.push({ x: hx - fx * d, y: hy, z: hz - fz * d });
+      } else {
+        st.travelled += Math.hypot(hx - st.last.x, hz - st.last.z);
+      }
+      st.last = { x: hx, z: hz };
+      // Slither: a small sideways wave along the distance flown (none while hovering).
+      const wave = WAVE_AMPLITUDE * Math.sin((st.travelled / WAVE_LENGTH) * Math.PI * 2);
+      st.path.push({ x: hx + fz * wave, y: hy, z: hz - fx * wave });
+      if (!paused) st.time += dt;
+    } else if (!paused) {
       st.s += SPEED * dt;
       st.time += dt;
       st.path.push(slitherAt(route, st.s));
@@ -103,6 +145,8 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
     headRoot.matrixAutoUpdate = false;
     place(headRoot, pts[0], frames[0]);
     headRoot.matrix.scale(scratch.scl.setScalar(headRoot.scale.x));
+    // Lean the head into turns (the body follows the flight path and does not roll).
+    if (f && f.bank !== 0) headRoot.matrix.multiply(scratch.roll.makeRotationZ(-f.bank * 0.7));
 
     // Living details: breathing jaw (0–35° allowed by the contract), swaying whiskers.
     const t = st.time;
@@ -118,18 +162,19 @@ export function Dragon({ skinId, quality, paused }: DragonProps) {
     for (let i = -1; i < mats.length; i++) {
       const m = i < 0 ? built.bodyMat : mats[i];
       m.uniforms.uTime.value = t;
-      m.uniforms.uDragonLightPos.value.copy(lp);
+      // The shader works in world space; the group is scaled about the origin.
+      m.uniforms.uDragonLightPos.value.copy(lp).multiplyScalar(scale);
     }
   });
 
   if (!built) return null;
   return (
-    <group>
+    <group scale={scale}>
       <primitive object={built.body} dispose={null} />
       <primitive object={built.ridges} dispose={null} />
       <primitive object={built.fin} dispose={null} />
       <primitive object={built.head.root} dispose={null} />
-      <pointLight ref={light} color={SKINS[skinId].glow} intensity={QUALITY[quality].dragonLight} distance={9} decay={2} />
+      <pointLight ref={light} color={SKINS[skinId].glow} intensity={QUALITY[quality].dragonLight} distance={9 * scale} decay={2} />
     </group>
   );
 }

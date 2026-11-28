@@ -318,5 +318,16 @@
     "stats": { "fps": "FPS", "drawCalls": "Draw calls", "triangles": "Triangles", "gpuObjects": "GPU objects", "quality": "Quality" },
     "bench": { "start": "30 s benchmark", "running": "Benchmark… {seconds} s", "result": "Avg {avg} FPS · 1% low {low} FPS · worst {worst} ms" },
     "hint": "Drag to orbit, pinch or scroll to zoom."
+  },
+  "dragonFlight": {
+    "title": "Dragon Lab: free flight",
+    "hud": { "speed": "Speed", "altitude": "Height" },
+    "size": "{metres} m",
+    "restart": "Restart",
+    "resume": "Paused · tap to resume",
+    "keysHint": "W/S speed · A/D turn · Space up · Shift or C down · E boost · drag to look · P pause · R restart",
+    "touch": { "up": "Up", "down": "Down", "boost": "Boost", "stick": "Steer and speed" },
+    "replay": { "start": "Replay last 60 s", "stop": "Stop replay", "playing": "Replaying…", "match": "Replay matched the live flight ✓", "mismatch": "Replay did not match the live flight ✗" },
+    "debug": { "toggle": "Debug", "mode": "Mode", "air": "Air", "tick": "tick", "hash": "Hash", "contacts": "contacts", "runTests": "Run test flights" }
   }
 }

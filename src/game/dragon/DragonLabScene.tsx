@@ -130,7 +130,7 @@ function CameraFit() {
   return null;
 }
 
-function PerfProbe({ onStats, onFrame }: Pick<DragonLabSceneProps, "onStats" | "onFrame">) {
+export function PerfProbe({ onStats, onFrame }: Pick<DragonLabSceneProps, "onStats" | "onFrame">) {
   const gl = useThree((s) => s.gl);
   const acc = useRef({ frames: 0, time: 0, last: 0 });
   useEffect(() => {
