@@ -302,5 +302,21 @@
     "title": "Off the course",
     "body": "That page doesn't exist.",
     "back": "Back to home"
+    },
+  "dragonLab": {
+    "title": "Dragon Lab",
+    "subtitle": "Phase 1 prototype of the 3D dragon. Not part of the game yet.",
+    "noWebgl": "This device or browser can't show 3D graphics (WebGL 2 is not available).",
+    "contextLost": "The 3D view stopped because the graphics context was lost. Reload the page to try again.",
+    "skin": "Skin",
+    "skins": { "neonMagenta": "Neon Magenta", "neonEmerald": "Neon Emerald", "electricCyan": "Electric Cyan" },
+    "qualityLabel": "Quality",
+    "quality": { "low": "Low", "medium": "Medium", "high": "High" },
+    "pause": "Pause",
+    "play": "Play",
+    "statsToggle": "Stats",
+    "stats": { "fps": "FPS", "drawCalls": "Draw calls", "triangles": "Triangles", "gpuObjects": "GPU objects", "quality": "Quality" },
+    "bench": { "start": "30 s benchmark", "running": "Benchmark… {seconds} s", "result": "Avg {avg} FPS · 1% low {low} FPS · worst {worst} ms" },
+    "hint": "Drag to orbit, pinch or scroll to zoom."
   }
 }
