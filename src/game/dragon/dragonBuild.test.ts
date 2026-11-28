@@ -63,7 +63,9 @@ describe("Dragon build ownership (TB-2)", () => {
         expect(liveResources.count).toBe(start);
       }
     }
-  });
+    // 60 full dragon builds: allow time when the suite runs in parallel with the 10,000-flight
+    // stress test (it took 8.3 s on the owner's Windows laptop, over the 5 s default).
+  }, 30_000);
 });
 
 /** Every colour a skin controls, for each mesh in scene order: [label, r, g, b][]. */
